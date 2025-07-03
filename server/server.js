@@ -14,6 +14,9 @@ const reportsRoutes = require('./routes/reports');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for correct client IP handling (needed for rate limiting and proxies)
+app.set('trust proxy', 1); // Trust first proxy (e.g., Nginx, AWS ELB)
+
 // Security middleware
 app.use(helmet({
     crossOriginEmbedderPolicy: false,
@@ -28,8 +31,16 @@ app.use(helmet({
 }));
 
 // CORS middleware
+const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').map(url => url.trim()).filter(Boolean);
 app.use(cors({
-    origin: '*', // Allow all origins for testing
+    origin: function(origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true
 }));
 

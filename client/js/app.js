@@ -10,12 +10,15 @@ class TaskManager {
         this.currentFilters = {};
         this.currentEditingTask = null;
         this.refreshInterval = null;
+        this.notificationIntervals = {}; // Store notification intervals by taskId
         
         // Bind methods to preserve context
         this.init = this.init.bind(this);
         this.loadTasks = this.loadTasks.bind(this);
         this.loadUsers = this.loadUsers.bind(this);
         this.loadDashboardStats = this.loadDashboardStats.bind(this);
+        this.scheduleDeadlineNotifications = this.scheduleDeadlineNotifications.bind(this);
+        this.clearAllNotificationIntervals = this.clearAllNotificationIntervals.bind(this);
     }
 
     /**
@@ -126,9 +129,8 @@ class TaskManager {
             const response = await window.api.getTasks(this.currentFilters);
             this.tasks = response.tasks || response;
             this.renderTasks();
-            
+            this.scheduleDeadlineNotifications(); // Schedule notifications after loading tasks
             console.log(`📋 Loaded ${this.tasks.length} tasks`);
-            
         } catch (error) {
             console.error('❌ Failed to load tasks:', error);
             this.renderTasksError();
@@ -190,14 +192,25 @@ class TaskManager {
             this.setTaskFormLoading(true);
 
             let response;
+            let isNewTask = false;
+            let assignedUserId = taskData.assignedTo;
+            let assignedUserName = '';
             if (this.currentEditingTask) {
                 // Update existing task
                 response = await window.api.updateTask(this.currentEditingTask.id, taskData);
                 showNotification('Task updated successfully!', 'success');
+                // Check if assignment changed
+                if (this.currentEditingTask.assigned_to !== assignedUserId) {
+                    assignedUserName = this.users.find(u => u.id === assignedUserId)?.full_name || '';
+                    this.notifyTaskAssignment(taskData.title, assignedUserId, assignedUserName);
+                }
             } else {
                 // Create new task
                 response = await window.api.createTask(taskData);
                 showNotification('Task created successfully!', 'success');
+                isNewTask = true;
+                assignedUserName = this.users.find(u => u.id === assignedUserId)?.full_name || '';
+                this.notifyTaskAssignment(taskData.title, assignedUserId, assignedUserName);
             }
 
             // Refresh data
@@ -274,6 +287,9 @@ class TaskManager {
                 task.completed_at = new Date().toISOString();
             }
 
+            // Clean up notification interval
+            this.clearNotificationInterval(taskId);
+
             // Refresh data
             await Promise.all([
                 this.loadTasks(),
@@ -301,6 +317,9 @@ class TaskManager {
             
             // Remove from local tasks
             this.tasks = this.tasks.filter(t => t.id !== taskId);
+
+            // Clean up notification interval
+            this.clearNotificationInterval(taskId);
 
             // Refresh data
             await Promise.all([
@@ -417,6 +436,11 @@ class TaskManager {
 
         const tasksHTML = this.tasks.map(task => this.renderTask(task)).join('');
         tasksList.innerHTML = tasksHTML;
+
+        // Auto-fix: update timer display for each task after rendering
+        this.tasks.forEach(task => {
+            this.updateTimerDisplay(task.id);
+        });
     }
 
     /**
@@ -802,6 +826,7 @@ class TaskManager {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
         }
+        this.clearAllNotificationIntervals();
     }
 
     // Time tracking logic
@@ -885,6 +910,96 @@ class TaskManager {
         const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
         const s = String(seconds % 60).padStart(2, '0');
         return `${h}:${m}:${s}`;
+    }
+
+    // =================== Notification Scheduling ===================
+    async scheduleDeadlineNotifications() {
+        // Request permission if not already granted/denied
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            try {
+                await Notification.requestPermission();
+            } catch (e) {}
+        }
+        // Clear previous intervals
+        this.clearAllNotificationIntervals();
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        const now = new Date();
+        const currentUser = window.authManager?.getCurrentUser?.();
+        this.tasks.forEach(task => {
+            if (!task.due_date || task.status === 'completed') return;
+            // Only notify if assigned to current user
+            if (currentUser && task.assigned_to !== currentUser.id) return;
+            const due = new Date(task.due_date);
+            const msToDue = due - now;
+            // Only schedule if due within 24h and not overdue
+            if (msToDue > 0 && msToDue <= 24 * 60 * 60 * 1000) {
+                // Notify if within 2h of deadline or less
+                const notify = () => {
+                    new Notification('Task Deadline Approaching', {
+                        body: `Task "${task.title}" is due at ${due.toLocaleString()}. Please complete it soon!`,
+                        tag: `task-deadline-${task.id}`
+                    });
+                };
+                // If less than 2h to deadline, notify now and every 2h until completed
+                if (msToDue <= 2 * 60 * 60 * 1000) {
+                    notify();
+                    this.notificationIntervals[task.id] = setInterval(() => {
+                        // Check if task is still not completed
+                        const t = this.tasks.find(t => t.id === task.id);
+                        if (t && t.status !== 'completed') {
+                            notify();
+                        } else {
+                            this.clearNotificationInterval(task.id);
+                        }
+                    }, 2 * 60 * 60 * 1000); // every 2 hours
+                } else {
+                    // Schedule first notification at (due - 2h)
+                    const firstTimeout = msToDue - 2 * 60 * 60 * 1000;
+                    this.notificationIntervals[task.id] = setTimeout(() => {
+                        notify();
+                        // After first, repeat every 2h until completed
+                        this.notificationIntervals[task.id] = setInterval(() => {
+                            const t = this.tasks.find(t => t.id === task.id);
+                            if (t && t.status !== 'completed') {
+                                notify();
+                            } else {
+                                this.clearNotificationInterval(task.id);
+                            }
+                        }, 2 * 60 * 60 * 1000);
+                    }, firstTimeout);
+                }
+            }
+        });
+    }
+    clearNotificationInterval(taskId) {
+        const interval = this.notificationIntervals[taskId];
+        if (interval) {
+            clearInterval(interval);
+            clearTimeout(interval);
+            delete this.notificationIntervals[taskId];
+        }
+    }
+    clearAllNotificationIntervals() {
+        Object.keys(this.notificationIntervals).forEach(taskId => {
+            this.clearNotificationInterval(taskId);
+        });
+    }
+    // Push notification for task assignment
+    async notifyTaskAssignment(taskTitle, assignedUserId, assignedUserName) {
+        if (typeof Notification === 'undefined') return;
+        const currentUser = window.authManager?.getCurrentUser?.();
+        if (!currentUser || currentUser.id !== assignedUserId) return;
+        if (Notification.permission === 'default') {
+            try {
+                await Notification.requestPermission();
+            } catch (e) {}
+        }
+        if (Notification.permission === 'granted') {
+            new Notification('New Task Assigned', {
+                body: `You have been assigned a new task: "${taskTitle}"`,
+                tag: `task-assigned-${taskTitle}`
+            });
+        }
     }
 }
 
