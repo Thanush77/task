@@ -12,7 +12,7 @@
     "lint:fix": "eslint js/*.js --fix",
     "serve": "python3 -m http.server 3001",
     "validate": "html-validate index.html",
-    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/"
+    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/ && mkdir -p public/js && cp -f js/config.js public/js/"
   },
   "devDependencies": {
     "clean-css-cli": "^5.6.2",
