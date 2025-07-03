@@ -1246,10 +1246,12 @@ function renderTimeTracking(data) {
  */
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🌟 TaskFlow application starting...');
-    
+    // Ensure authManager is initialized first
+    if (!window.authManager) {
+        window.authManager = new AuthManager();
+    }
     // Create global task manager instance
     window.taskManager = new TaskManager();
-    
     // Initialize if user is already authenticated
     if (window.authManager && window.authManager.isAuthenticated()) {
         window.taskManager.init();
