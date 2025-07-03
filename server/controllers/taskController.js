@@ -1,4 +1,5 @@
 const Task = require('../models/Task');
+const TimeEntry = require('../models/TimeEntry');
 const { sanitizeInput } = require('../utils/helpers');
 
 class TaskController {
@@ -288,6 +289,54 @@ class TaskController {
         } catch (error) {
             console.error('Get task stats error:', error);
             res.status(500).json({ error: 'Failed to retrieve task statistics' });
+        }
+    }
+
+    // Start time tracking for a task
+    static async startTime(req, res) {
+        try {
+            const taskId = parseInt(req.params.id);
+            const userId = req.user.id;
+            const entry = await TimeEntry.start(taskId, userId);
+            res.json({ message: 'Timer started', entry });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to start timer' });
+        }
+    }
+
+    // Pause time tracking for a task
+    static async pauseTime(req, res) {
+        try {
+            const taskId = parseInt(req.params.id);
+            const userId = req.user.id;
+            const entry = await TimeEntry.pause(taskId, userId);
+            res.json({ message: 'Timer paused', entry });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to pause timer' });
+        }
+    }
+
+    // Get active time entry for a task/user
+    static async getActiveTime(req, res) {
+        try {
+            const taskId = parseInt(req.params.id);
+            const userId = req.user.id;
+            const entry = await TimeEntry.getActive(taskId, userId);
+            res.json({ entry });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get active timer' });
+        }
+    }
+
+    // Get time entry history for a task/user
+    static async getTimeHistory(req, res) {
+        try {
+            const taskId = parseInt(req.params.id);
+            const userId = req.user.id;
+            const history = await TimeEntry.getHistory(taskId, userId);
+            res.json({ history });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get time history' });
         }
     }
 }

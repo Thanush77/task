@@ -15,4 +15,10 @@ router.post('/', TaskController.createTask);
 router.put('/:id', TaskController.updateTask);
 router.delete('/:id', TaskController.deleteTask);
 
+// Time tracking endpoints
+router.post('/:id/time/start', TaskController.startTime);
+router.post('/:id/time/pause', TaskController.pauseTime);
+router.get('/:id/time/active', TaskController.getActiveTime);
+router.get('/:id/time/history', TaskController.getTimeHistory);
+
 module.exports = router;

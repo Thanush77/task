@@ -16,16 +16,8 @@ class APIClient {
      * Get the base URL for API requests
      */
     getBaseURL() {
-        // Check if we're in development or production
-        const isDevelopment = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1';
-        
-        if (isDevelopment) {
-            return 'http://localhost:3000/api';
-        }
-        
-        // For production, use the same origin
-        return `${window.location.origin}/api`;
+        // Use the global config set in config.js
+        return window.APP_CONFIG.API_BASE_URL;
     }
 
     /**

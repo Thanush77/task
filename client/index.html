@@ -6,6 +6,7 @@
     <title>TaskFlow - Task Management System</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -277,13 +278,31 @@
         <div id="reports" class="tab-content">
             <div class="reports-header">
                 <h2>Reports & Analytics</h2>
+                <div class="reports-filters">
+                    <label for="reportStartDate">Start Date:</label>
+                    <input type="date" id="reportStartDate">
+                    <label for="reportEndDate">End Date:</label>
+                    <input type="date" id="reportEndDate">
+                    <button class="btn btn-primary" id="applyReportFilters">Apply</button>
+                    <button class="btn btn-secondary" id="resetReportFilters">Reset</button>
+                </div>
+                <div class="reports-export">
+                    <button class="btn btn-secondary" id="exportCSV">Export CSV</button>
+                    <button class="btn btn-secondary" id="exportPDF">Export PDF</button>
+                </div>
             </div>
-            
             <div class="reports-content">
-                <div class="coming-soon">
-                    <div class="coming-soon-icon">📊</div>
-                    <h3>Reports Coming Soon</h3>
-                    <p>Advanced analytics and reporting features will be available in the next update!</p>
+                <div id="taskStatsReport" class="report-section">
+                    <h3>Task Statistics</h3>
+                    <div id="taskStatsChart"></div>
+                </div>
+                <div id="userProductivityReport" class="report-section">
+                    <h3>User Productivity</h3>
+                    <div id="userProductivityTable"></div>
+                </div>
+                <div id="timeTrackingReport" class="report-section">
+                    <h3>Time Tracking</h3>
+                    <div id="timeTrackingTable"></div>
                 </div>
             </div>
         </div>

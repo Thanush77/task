@@ -1,24 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: taskflow_postgres
-    environment:
-      POSTGRES_DB: taskflow
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - taskflow_network
-    restart: unless-stopped
-
-  # Redis Cache (optional for future use)
   redis:
     image: redis:7-alpine
     container_name: taskflow_redis
@@ -30,21 +12,19 @@ services:
       - taskflow_network
     restart: unless-stopped
 
-  # Node.js Application
   app:
     build: .
     container_name: taskflow_app
     environment:
-      NODE_ENV: production
-      DB_HOST: postgres
+      DB_HOST: prestige-park-groove.cb4e4w6y2od4.us-east-1.rds.amazonaws.com
       DB_USER: postgres
-      DB_PASSWORD: password
-      DB_NAME: taskflow
+      DB_PASSWORD: your_password_here
+      DB_NAME: postgres
+      DB_PORT: 5432
       REDIS_HOST: redis
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
       - redis
     volumes:
       - ./logs:/app/logs
@@ -53,7 +33,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   redis_data:
 
 networks:

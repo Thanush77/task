@@ -1,11 +1,11 @@
 const config = {
     development: {
-        API_BASE_URL: 'http://localhost:3000/api',
+        API_BASE_URL: 'http://54.146.215.18:3000/api',
         DEBUG: true,
         LOG_LEVEL: 'debug'
     },
     production: {
-        API_BASE_URL: '/api', // Same origin in production
+        API_BASE_URL: 'http://54.146.215.18:3000/api',
         DEBUG: false,
         LOG_LEVEL: 'error'
     }

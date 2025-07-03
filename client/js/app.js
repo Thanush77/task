@@ -434,6 +434,17 @@ class TaskManager {
         const canEdit = task.created_by === window.authManager.getCurrentUser()?.id || 
                        task.assigned_to === window.authManager.getCurrentUser()?.id;
 
+        // Time tracking controls
+        const timeControls = `
+            <div class="task-timer" id="task-timer-${task.id}">
+                <span class="timer-display" id="timer-display-${task.id}">--:--:--</span>
+                <span class="timer-total" id="timer-total-${task.id}" style="margin-left:8px;font-size:0.9em;color:#888;">Total: --:--:--</span>
+                <button class="btn btn-small btn-primary" onclick="taskManager.startTimer(${task.id})">▶️ Start</button>
+                <button class="btn btn-small btn-warning" onclick="taskManager.pauseTimer(${task.id})">⏸️ Pause</button>
+                <button class="btn btn-small btn-danger" onclick="taskManager.stopTimer(${task.id})">⏹️ Stop</button>
+            </div>
+        `;
+
         return `
             <div class="task-item ${priorityClass}" data-task-id="${task.id}">
                 <div class="task-header">
@@ -471,6 +482,7 @@ class TaskManager {
                         </button>` : ''
                     }
                 </div>
+                ${!isCompleted ? timeControls : ''}
             </div>
         `;
     }
@@ -791,6 +803,89 @@ class TaskManager {
             clearInterval(this.refreshInterval);
         }
     }
+
+    // Time tracking logic
+    timerIntervals = {};
+
+    async startTimer(taskId) {
+        try {
+            await window.api.request(`/tasks/${taskId}/time/start`, { method: 'POST' });
+            this.updateTimerDisplay(taskId);
+        } catch (error) {
+            showNotification('Failed to start timer', 'error');
+        }
+    }
+
+    async pauseTimer(taskId) {
+        try {
+            await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
+            this.updateTimerDisplay(taskId);
+        } catch (error) {
+            showNotification('Failed to pause timer', 'error');
+        }
+    }
+
+    async stopTimer(taskId) {
+        // Stop = pause and reset (no active timer)
+        try {
+            await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
+            this.clearTimerInterval(taskId);
+            this.updateTimerDisplay(taskId, true);
+        } catch (error) {
+            showNotification('Failed to stop timer', 'error');
+        }
+    }
+
+    clearTimerInterval(taskId) {
+        if (this.timerIntervals[taskId]) {
+            clearInterval(this.timerIntervals[taskId]);
+            delete this.timerIntervals[taskId];
+        }
+    }
+
+    async updateTimerDisplay(taskId, reset = false) {
+        // Get active timer and total time
+        try {
+            const res = await window.api.request(`/tasks/${taskId}/time/active`);
+            const historyRes = await window.api.request(`/tasks/${taskId}/time/history`);
+            const timerDisplay = document.getElementById(`timer-display-${taskId}`);
+            const timerTotal = document.getElementById(`timer-total-${taskId}`);
+            // Calculate total time (sum durations)
+            let totalSeconds = 0;
+            if (historyRes.history) {
+                for (const entry of historyRes.history) {
+                    if (entry.duration) totalSeconds += Math.floor(entry.duration * 60);
+                }
+            }
+            // If timer is running, add current session
+            if (res.entry && res.entry.startTime && !res.entry.endTime) {
+                const start = new Date(res.entry.startTime);
+                const now = new Date();
+                const diff = Math.floor((now - start) / 1000);
+                timerDisplay.textContent = this.formatSeconds(diff);
+                this.clearTimerInterval(taskId);
+                this.timerIntervals[taskId] = setInterval(() => {
+                    const now2 = new Date();
+                    const diff2 = Math.floor((now2 - start) / 1000);
+                    timerDisplay.textContent = this.formatSeconds(diff2);
+                }, 1000);
+                timerTotal.textContent = `Total: ${this.formatSeconds(totalSeconds + diff)}`;
+            } else {
+                timerDisplay.textContent = '--:--:--';
+                timerTotal.textContent = `Total: ${this.formatSeconds(totalSeconds)}`;
+                this.clearTimerInterval(taskId);
+            }
+        } catch (error) {
+            // Ignore
+        }
+    }
+
+    formatSeconds(seconds) {
+        const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+        const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+        const s = String(seconds % 60).padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    }
 }
 
 // =================== Global UI Functions ===================
@@ -938,6 +1033,96 @@ window.formatDuration = function(minutes) {
         return `${hours}h ${mins}m`;
     }
 };
+
+// =================== Reports & Analytics (with Chart.js) ===================
+
+let taskStatsChartInstance = null;
+let userProductivityChartInstance = null;
+
+async function fetchAndRenderReports() {
+    const startDate = document.getElementById('reportStartDate').value;
+    const endDate = document.getElementById('reportEndDate').value;
+    const params = [];
+    if (startDate) params.push(`startDate=${encodeURIComponent(startDate)}`);
+    if (endDate) params.push(`endDate=${encodeURIComponent(endDate)}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+
+    // Task Statistics
+    const taskStats = await window.api.request(`/reports/task-stats${query}`);
+    renderTaskStatsChart(taskStats);
+
+    // User Productivity
+    const userProductivity = await window.api.request(`/reports/user-productivity${query}`);
+    renderUserProductivityChart(userProductivity);
+
+    // Time Tracking
+    const timeTracking = await window.api.request(`/reports/time-tracking${query}`);
+    renderTimeTracking(timeTracking);
+}
+
+function renderTaskStatsChart(stats) {
+    const container = document.getElementById('taskStatsChart');
+    if (!container) return;
+    container.innerHTML = '<canvas id="taskStatsCanvas" height="120"></canvas>';
+    const ctx = document.getElementById('taskStatsCanvas').getContext('2d');
+    if (taskStatsChartInstance) taskStatsChartInstance.destroy();
+    taskStatsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Completed', 'Pending', 'In Progress', 'Cancelled'],
+            datasets: [{
+                label: 'Tasks',
+                data: [stats.completed, stats.pending, stats.in_progress, stats.cancelled],
+                backgroundColor: [
+                    '#4caf50', '#ff9800', '#2196f3', '#f44336'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function renderUserProductivityChart(data) {
+    const container = document.getElementById('userProductivityTable');
+    if (!container) return;
+    container.innerHTML = '<canvas id="userProductivityCanvas" height="120"></canvas>';
+    const ctx = document.getElementById('userProductivityCanvas').getContext('2d');
+    if (userProductivityChartInstance) userProductivityChartInstance.destroy();
+    userProductivityChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(u => u.full_name || u.username),
+            datasets: [{
+                label: 'Completed Tasks',
+                data: data.map(u => u.completed_tasks),
+                backgroundColor: '#4caf50'
+            }, {
+                label: 'Total Time (min)',
+                data: data.map(u => u.total_minutes),
+                backgroundColor: '#2196f3'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function renderTimeTracking(data) {
+    const container = document.getElementById('timeTrackingTable');
+    if (!container) return;
+    let html = `<table class="report-table"><thead><tr><th>User</th><th>Task</th><th>Entries</th><th>Total Time (min)</th><th>Avg Time (min)</th></tr></thead><tbody>`;
+    data.forEach(row => {
+        html += `<tr><td>${row.username}</td><td>${row.title || '-'}</td><td>${row.entries}</td><td>${row.total_minutes}</td><td>${row.avg_minutes}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
 
 // =================== Application Initialization ===================
 
