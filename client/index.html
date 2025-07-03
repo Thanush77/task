@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow - Task Management System</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <h2>TaskFlow</h2>
+        <p>Loading your workspace...</p>
+    </div>
+
+    <!-- Authentication Screen -->
+    <div id="authContainer" class="auth-container" style="display: none;">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>TaskFlow</h1>
+                <p>Welcome to your productivity hub</p>
+            </div>
+            
+            <div id="authError" class="error-message" style="display: none;"></div>
+            <div id="authSuccess" class="success-message" style="display: none;"></div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form" style="display: block;">
+                <h2>Sign In</h2>
+                
+                <div class="form-group">
+                    <label for="loginUsername">Username or Email</label>
+                    <input type="text" id="loginUsername" placeholder="Enter your username or email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    <span class="btn-text">Sign In</span>
+                    <span class="btn-loader" style="display: none;">
+                        <div class="spinner"></div>
+                        Signing In...
+                    </span>
+                </button>
+                
+                <div class="auth-switch">
+                    Don't have an account? 
+                    <button type="button" class="link-btn" onclick="showRegisterForm()">Sign Up</button>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="auth-form" style="display: none;">
+                <h2>Create Account</h2>
+                
+                <div class="form-group">
+                    <label for="regFullName">Full Name</label>
+                    <input type="text" id="regFullName" placeholder="Enter your full name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="regUsername">Username</label>
+                    <input type="text" id="regUsername" placeholder="Choose a username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="regEmail">Email</label>
+                    <input type="email" id="regEmail" placeholder="Enter your email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" placeholder="Create a strong password" required>
+                    <div class="password-requirements" id="passwordRequirements" style="display: none;">
+                        <small>Password must contain:</small>
+                        <ul>
+                            <li id="req-length">At least 8 characters</li>
+                            <li id="req-uppercase">One uppercase letter</li>
+                            <li id="req-lowercase">One lowercase letter</li>
+                            <li id="req-number">One number</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="registerBtn">
+                    <span class="btn-text">Create Account</span>
+                    <span class="btn-loader" style="display: none;">
+                        <div class="spinner"></div>
+                        Creating Account...
+                    </span>
+                </button>
+                
+                <div class="auth-switch">
+                    Already have an account? 
+                    <button type="button" class="link-btn" onclick="showLoginForm()">Sign In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="appContainer" class="app-container" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1>TaskFlow</h1>
+                    <p>Welcome back, <span id="userName">User</span>!</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-profile">
+                        <div class="avatar" id="userAvatar">U</div>
+                        <div class="user-info">
+                            <div class="user-name" id="userFullName">User</div>
+                            <div class="user-role">Productivity Pro</div>
+                        </div>
+                        <div class="user-menu">
+                            <button class="menu-btn" onclick="toggleUserMenu()">⋮</button>
+                            <div class="dropdown-menu" id="userMenu">
+                                <button onclick="showProfileModal()">Profile</button>
+                                <button onclick="logout()">Logout</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('dashboard')" data-tab="dashboard">
+                📊 Dashboard
+            </button>
+            <button class="nav-tab" onclick="showTab('tasks')" data-tab="tasks">
+                ✅ Tasks
+            </button>
+            <button class="nav-tab" onclick="showTab('team')" data-tab="team">
+                👥 Team
+            </button>
+            <button class="nav-tab" onclick="showTab('reports')" data-tab="reports">
+                📈 Reports
+            </button>
+        </nav>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard" class="tab-content active">
+            <div class="dashboard-header">
+                <h2>Today's Overview</h2>
+                <button class="btn btn-secondary" onclick="refreshDashboard()">
+                    <span id="refreshIcon">🔄</span> Refresh
+                </button>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="stat-card total-tasks">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-number" id="totalTasks">-</div>
+                    <div class="stat-label">Total Tasks</div>
+                    <div class="stat-change">↗ +2 from yesterday</div>
+                </div>
+                
+                <div class="stat-card completed">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-number" id="completedTasks">-</div>
+                    <div class="stat-label">Completed</div>
+                    <div class="stat-change">↗ +5 this week</div>
+                </div>
+                
+                <div class="stat-card in-progress">
+                    <div class="stat-icon">🚀</div>
+                    <div class="stat-number" id="inProgressTasks">-</div>
+                    <div class="stat-label">In Progress</div>
+                    <div class="stat-change">→ Same as yesterday</div>
+                </div>
+                
+                <div class="stat-card assigned">
+                    <div class="stat-icon">👤</div>
+                    <div class="stat-number" id="assignedToMe">-</div>
+                    <div class="stat-label">Assigned to Me</div>
+                    <div class="stat-change">↗ +1 today</div>
+                </div>
+                
+                <div class="stat-card time-today">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-number" id="timeToday">0h 0m</div>
+                    <div class="stat-label">Time Today</div>
+                    <div class="stat-change">↗ +2h this week</div>
+                </div>
+                
+                <div class="stat-card assigned-by-me">
+                    <div class="stat-icon">📤</div>
+                    <div class="stat-number" id="assignedByMe">-</div>
+                    <div class="stat-label">Assigned by Me</div>
+                    <div class="stat-change">→ Same as yesterday</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <h3>Quick Actions</h3>
+                <div class="action-buttons">
+                    <button class="action-btn" onclick="openCreateTaskModal()">
+                        <span class="action-icon">➕</span>
+                        <span>Create Task</span>
+                    </button>
+                    <button class="action-btn" onclick="showTab('tasks')">
+                        <span class="action-icon">👀</span>
+                        <span>View All Tasks</span>
+                    </button>
+                    <button class="action-btn" onclick="showTab('team')">
+                        <span class="action-icon">👥</span>
+                        <span>Team Overview</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks Content -->
+        <div id="tasks" class="tab-content">
+            <div class="tasks-header">
+                <h2>Task Management</h2>
+                <div class="tasks-controls">
+                    <div class="filter-group">
+                        <select id="statusFilter" onchange="filterTasks()">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                        <select id="priorityFilter" onchange="filterTasks()">
+                            <option value="">All Priorities</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <input type="text" id="searchTasks" placeholder="Search tasks..." onkeyup="searchTasks()">
+                    </div>
+                    <button class="btn btn-primary" onclick="openCreateTaskModal()">
+                        ➕ New Task
+                    </button>
+                </div>
+            </div>
+            
+            <div class="tasks-container">
+                <div id="tasksList">
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading tasks...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Content -->
+        <div id="team" class="tab-content">
+            <div class="team-header">
+                <h2>Team Members</h2>
+                <div class="team-stats">
+                    <span class="team-count">Total: <span id="teamCount">-</span> members</span>
+                </div>
+            </div>
+            
+            <div class="team-grid" id="teamGrid">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading team members...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Content -->
+        <div id="reports" class="tab-content">
+            <div class="reports-header">
+                <h2>Reports & Analytics</h2>
+            </div>
+            
+            <div class="reports-content">
+                <div class="coming-soon">
+                    <div class="coming-soon-icon">📊</div>
+                    <h3>Reports Coming Soon</h3>
+                    <p>Advanced analytics and reporting features will be available in the next update!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Task Button (Floating) -->
+    <button class="create-task-fab" onclick="openCreateTaskModal()" id="createTaskFab" style="display: none;">
+        ➕
+    </button>
+
+    <!-- Create/Edit Task Modal -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Create New Task</h2>
+                <button class="close-btn" onclick="closeTaskModal()">&times;</button>
+            </div>
+            
+            <form id="taskForm" class="task-form">
+                <div class="form-group">
+                    <label for="taskAssignTo">Assign To *</label>
+                    <select id="taskAssignTo" required>
+                        <option value="">Loading users...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskTitle">Task Title *</label>
+                    <input type="text" id="taskTitle" placeholder="Enter task title" required maxlength="255">
+                </div>
+
+                <div class="form-group">
+                    <label for="taskDescription">Description</label>
+                    <textarea id="taskDescription" placeholder="Enter task description" rows="4"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority">
+                            <option value="low">🟢 Low</option>
+                            <option value="medium" selected>🟡 Medium</option>
+                            <option value="high">🔴 High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskCategory">Category</label>
+                        <select id="taskCategory">
+                            <option value="general" selected>General</option>
+                            <option value="development">Development</option>
+                            <option value="design">Design</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="research">Research</option>
+                            <option value="planning">Planning</option>
+                            <option value="testing">Testing</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskEstimatedHours">Estimated Hours</label>
+                    <input type="number" id="taskEstimatedHours" min="0.5" step="0.5" value="1.0">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskStartDate">Start Date & Time</label>
+                        <input type="datetime-local" id="taskStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskDueDate">Due Date & Time</label>
+                        <input type="datetime-local" id="taskDueDate">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskTags">Tags</label>
+                    <input type="text" id="taskTags" placeholder="Add tags (comma separated)">
+                    <small>Example: urgent, client-work, frontend</small>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="taskSubmitBtn">
+                        <span class="btn-text">Create Task</span>
+                        <span class="btn-loader" style="display: none;">
+                            <div class="spinner"></div>
+                            Creating...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Profile Settings</h2>
+                <button class="close-btn" onclick="closeProfileModal()">&times;</button>
+            </div>
+            
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="profileFullName">Full Name</label>
+                    <input type="text" id="profileFullName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="profileEmail">Email</label>
+                    <input type="email" id="profileEmail" required>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

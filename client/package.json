@@ -1,0 +1,31 @@
+{
+  "name": "taskflow-client",
+  "version": "1.0.0",
+  "description": "TaskFlow Frontend Application",
+  "scripts": {
+    "start": "http-server . -p 8080 -c-1",
+    "dev": "live-server --port=8080 --entry-file=index.html",
+    "build": "npm run minify-css && npm run minify-js",
+    "minify-css": "cleancss -o css/styles.min.css css/styles.css",
+    "minify-js": "terser js/*.js -o js/app.min.js",
+    "lint": "eslint js/*.js",
+    "lint:fix": "eslint js/*.js --fix",
+    "serve": "python3 -m http.server 8080",
+    "validate": "html-validate index.html"
+  },
+  "devDependencies": {
+    "clean-css-cli": "^5.6.2",
+    "eslint": "^8.53.0",
+    "html-validate": "^8.7.3",
+    "http-server": "^14.1.1",
+    "live-server": "^1.2.2",
+    "terser": "^5.19.4"
+  },
+  "keywords": [
+    "task-management",
+    "frontend",
+    "spa"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
