@@ -4,9 +4,7 @@
  */
 
 // Ensure global authManager is initialized before anything else
-if (!window.authManager) {
-    window.authManager = new AuthManager();
-}
+window.authManager = new AuthManager();
 
 class TaskManager {
     constructor() {

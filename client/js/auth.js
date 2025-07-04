@@ -659,7 +659,8 @@ document.addEventListener('click', (e) => {
 });
 
 // Create global auth manager instance
-window.authManager = new AuthManager();
+// Remove this line:
+// window.authManager = new AuthManager();
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
