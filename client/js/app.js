@@ -3,7 +3,6 @@
  * Handles task management, dashboard, team, and UI interactions
  */
 
-// Ensure global authManager is initialized before anything else
 window.authManager = new AuthManager();
 
 class TaskManager {

@@ -12,6 +12,6 @@ var config = {
 };
 
 // Auto-detect environment
-const environment = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'development' : 'production';
+var environment = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'development' : 'production';
 window.APP_CONFIG = config[environment];
 console.log('APP_CONFIG:', window.APP_CONFIG);
