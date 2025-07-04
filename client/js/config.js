@@ -5,7 +5,7 @@ const config = {
         LOG_LEVEL: 'debug'
     },
     production: {
-        API_BASE_URL: 'http://54.146.215.18:3001/api',
+        API_BASE_URL: '/api',
         DEBUG: false,
         LOG_LEVEL: 'error'
     }
