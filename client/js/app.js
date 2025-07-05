@@ -1046,9 +1046,10 @@ TaskManager.prototype.renderTasks = function() {
     let filteredTasks = [];
     if (this.currentTaskView === 'assigned') {
         filteredTasks = this.tasks.filter(task => {
-            const match = String(task.assigned_to) === String(currentUser?.id);
+            const assignedTo = task.assigned_to !== undefined ? task.assigned_to : task.assignedTo;
+            const match = String(assignedTo) === String(currentUser?.id);
             if (!match) {
-                console.log(`Task ${task.id} not shown: assigned_to=${task.assigned_to}, currentUser.id=${currentUser?.id}`);
+                console.log(`Task ${task.id} not shown: assigned_to=${assignedTo}, currentUser.id=${currentUser?.id}`);
             }
             return match;
         });
