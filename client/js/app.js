@@ -1226,17 +1226,41 @@ async function fetchAndRenderReports() {
     if (endDate) params.push(`endDate=${encodeURIComponent(endDate)}`);
     const query = params.length ? `?${params.join('&')}` : '';
 
-    // Task Statistics
-    const taskStats = await window.api.request(`/reports/task-stats${query}`);
-    renderTaskStatsChart(taskStats);
+    try {
+        // Task Statistics
+        const taskStats = await window.api.request(`/reports/task-stats${query}`);
+        if (!taskStats || Object.keys(taskStats).length === 0) {
+            showNotification('No task statistics data found for the selected range.', 'info');
+        }
+        renderTaskStatsChart(taskStats);
+    } catch (error) {
+        showNotification('Failed to load task statistics report.', 'error');
+        renderTaskStatsChart({completed:0, pending:0, in_progress:0, cancelled:0});
+    }
 
-    // User Productivity
-    const userProductivity = await window.api.request(`/reports/user-productivity${query}`);
-    renderUserProductivityChart(userProductivity);
+    try {
+        // User Productivity
+        const userProductivity = await window.api.request(`/reports/user-productivity${query}`);
+        if (!userProductivity || userProductivity.length === 0) {
+            showNotification('No user productivity data found for the selected range.', 'info');
+        }
+        renderUserProductivityChart(userProductivity);
+    } catch (error) {
+        showNotification('Failed to load user productivity report.', 'error');
+        renderUserProductivityChart([]);
+    }
 
-    // Time Tracking
-    const timeTracking = await window.api.request(`/reports/time-tracking${query}`);
-    renderTimeTracking(timeTracking);
+    try {
+        // Time Tracking
+        const timeTracking = await window.api.request(`/reports/time-tracking${query}`);
+        if (!timeTracking || timeTracking.length === 0) {
+            showNotification('No time tracking data found for the selected range.', 'info');
+        }
+        renderTimeTracking(timeTracking);
+    } catch (error) {
+        showNotification('Failed to load time tracking report.', 'error');
+        renderTimeTracking([]);
+    }
 }
 
 function renderTaskStatsChart(stats) {
