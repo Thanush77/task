@@ -1042,9 +1042,16 @@ TaskManager.prototype.renderTasks = function() {
     const tasksList = document.getElementById('tasksList');
     if (!tasksList) return;
     const currentUser = window.authManager.getCurrentUser && window.authManager.getCurrentUser();
+    console.log('Current user:', currentUser);
     let filteredTasks = [];
     if (this.currentTaskView === 'assigned') {
-        filteredTasks = this.tasks.filter(task => task.assigned_to === currentUser?.id);
+        filteredTasks = this.tasks.filter(task => {
+            const match = String(task.assigned_to) === String(currentUser?.id);
+            if (!match) {
+                console.log(`Task ${task.id} not shown: assigned_to=${task.assigned_to}, currentUser.id=${currentUser?.id}`);
+            }
+            return match;
+        });
     } else if (this.currentTaskView === 'pending') {
         filteredTasks = this.tasks.filter(task => task.status !== 'completed');
     }

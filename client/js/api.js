@@ -36,7 +36,7 @@ class APIClient {
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
         
-        const config = {
+        var config = {
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -179,7 +179,7 @@ class APIClient {
      * Upload file (multipart/form-data)
      */
     async upload(endpoint, formData) {
-        const config = {
+        var config = {
             method: 'POST',
             body: formData
         };
