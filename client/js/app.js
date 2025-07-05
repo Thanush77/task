@@ -431,16 +431,19 @@ class TaskManager {
         const tasksList = document.getElementById('tasksList');
         if (!tasksList) return;
 
-        if (this.tasks.length === 0) {
+        const currentUser = window.authManager.getCurrentUser && window.authManager.getCurrentUser();
+        const assignedTasks = this.tasks.filter(task => task.assigned_to === currentUser?.id);
+
+        if (assignedTasks.length === 0) {
             tasksList.innerHTML = this.getEmptyTasksHTML();
             return;
         }
 
-        const tasksHTML = this.tasks.map(task => this.renderTask(task)).join('');
+        const tasksHTML = assignedTasks.map(task => this.renderTask(task)).join('');
         tasksList.innerHTML = tasksHTML;
 
         // Auto-fix: update timer display for each task after rendering
-        this.tasks.forEach(task => {
+        assignedTasks.forEach(task => {
             this.updateTimerDisplay(task.id);
         });
     }
@@ -461,7 +464,7 @@ class TaskManager {
                        task.assigned_to === window.authManager.getCurrentUser()?.id;
 
         // Time tracking controls
-        const timeControls = `
+        const timeControls = !isCompleted ? `
             <div class="task-timer" id="task-timer-${task.id}">
                 <span class="timer-display" id="timer-display-${task.id}">--:--:--</span>
                 <span class="timer-total" id="timer-total-${task.id}" style="margin-left:8px;font-size:0.9em;color:#888;">Total: --:--:--</span>
@@ -469,7 +472,7 @@ class TaskManager {
                 <button class="btn btn-small btn-warning" onclick="taskManager.pauseTimer(${task.id})">⏸️ Pause</button>
                 <button class="btn btn-small btn-danger" onclick="taskManager.stopTimer(${task.id})">⏹️ Stop</button>
             </div>
-        `;
+        ` : '';
 
         return `
             <div class="task-item ${priorityClass}" data-task-id="${task.id}">
@@ -508,7 +511,7 @@ class TaskManager {
                         </button>` : ''
                     }
                 </div>
-                ${!isCompleted ? timeControls : ''}
+                ${timeControls}
             </div>
         `;
     }
@@ -846,21 +849,22 @@ class TaskManager {
     async pauseTimer(taskId) {
         try {
             await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
-            this.updateTimerDisplay(taskId);
         } catch (error) {
             showNotification('Failed to pause timer', 'error');
         }
+        this.clearTimerInterval(taskId);
+        this.updateTimerDisplay(taskId, true);
     }
 
     async stopTimer(taskId) {
         // Stop = pause and reset (no active timer)
         try {
             await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
-            this.clearTimerInterval(taskId);
-            this.updateTimerDisplay(taskId, true);
         } catch (error) {
             showNotification('Failed to stop timer', 'error');
         }
+        this.clearTimerInterval(taskId);
+        this.updateTimerDisplay(taskId, true);
     }
 
     clearTimerInterval(taskId) {
