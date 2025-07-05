@@ -43,6 +43,9 @@ class TaskManager {
             // Set up auto-refresh
             this.setupAutoRefresh();
             
+            // Render task view toggle buttons
+            this.renderTaskViewToggle();
+
             console.log('✅ TaskManager initialized successfully');
             
         } catch (error) {
@@ -432,18 +435,23 @@ class TaskManager {
         if (!tasksList) return;
 
         const currentUser = window.authManager.getCurrentUser && window.authManager.getCurrentUser();
-        const assignedTasks = this.tasks.filter(task => task.assigned_to === currentUser?.id);
+        let filteredTasks = [];
+        if (this.currentTaskView === 'assigned') {
+            filteredTasks = this.tasks.filter(task => task.assigned_to === currentUser?.id);
+        } else if (this.currentTaskView === 'pending') {
+            filteredTasks = this.tasks.filter(task => task.status !== 'completed');
+        }
 
-        if (assignedTasks.length === 0) {
+        if (filteredTasks.length === 0) {
             tasksList.innerHTML = this.getEmptyTasksHTML();
             return;
         }
 
-        const tasksHTML = assignedTasks.map(task => this.renderTask(task)).join('');
+        const tasksHTML = filteredTasks.map(task => this.renderTask(task)).join('');
         tasksList.innerHTML = tasksHTML;
 
         // Auto-fix: update timer display for each task after rendering
-        assignedTasks.forEach(task => {
+        filteredTasks.forEach(task => {
             this.updateTimerDisplay(task.id);
         });
     }
@@ -1008,6 +1016,48 @@ class TaskManager {
         }
     }
 }
+
+// Add a property to TaskManager to track the current filter
+TaskManager.prototype.currentTaskView = 'assigned'; // 'assigned' or 'pending'
+
+// Add a method to render the filter buttons
+TaskManager.prototype.renderTaskViewToggle = function() {
+    const container = document.getElementById('taskViewToggle');
+    if (!container) return;
+    container.innerHTML = `
+        <button class="btn btn-small${this.currentTaskView === 'assigned' ? ' btn-primary' : ''}" onclick="taskManager.setTaskView('assigned')">Assigned to Me</button>
+        <button class="btn btn-small${this.currentTaskView === 'pending' ? ' btn-primary' : ''}" onclick="taskManager.setTaskView('pending')">Pending Tasks</button>
+    `;
+};
+
+// Add a method to set the current view and re-render
+TaskManager.prototype.setTaskView = function(view) {
+    this.currentTaskView = view;
+    this.renderTaskViewToggle();
+    this.renderTasks();
+};
+
+// Update renderTasks to filter based on the current view
+TaskManager.prototype.renderTasks = function() {
+    const tasksList = document.getElementById('tasksList');
+    if (!tasksList) return;
+    const currentUser = window.authManager.getCurrentUser && window.authManager.getCurrentUser();
+    let filteredTasks = [];
+    if (this.currentTaskView === 'assigned') {
+        filteredTasks = this.tasks.filter(task => task.assigned_to === currentUser?.id);
+    } else if (this.currentTaskView === 'pending') {
+        filteredTasks = this.tasks.filter(task => task.status !== 'completed');
+    }
+    if (filteredTasks.length === 0) {
+        tasksList.innerHTML = this.getEmptyTasksHTML();
+        return;
+    }
+    const tasksHTML = filteredTasks.map(task => this.renderTask(task)).join('');
+    tasksList.innerHTML = tasksHTML;
+    filteredTasks.forEach(task => {
+        this.updateTimerDisplay(task.id);
+    });
+};
 
 // =================== Global UI Functions ===================
 
