@@ -21,6 +21,8 @@ class Task {
         // Additional fields from joins
         this.assignedToName = data.assigned_to_name;
         this.createdByName = data.created_by_name;
+        this.assignedByName = data.assigned_by_name;
+        this.assignedAt = data.assigned_at;
         this.tags = data.tags;
     }
 
@@ -30,13 +32,17 @@ class Task {
                 SELECT t.*, 
                        u1.full_name as assigned_to_name,
                        u2.full_name as created_by_name,
+                       u3.full_name as assigned_by_name,
+                       ta.assigned_at,
                        ARRAY_AGG(tt.tag) FILTER (WHERE tt.tag IS NOT NULL) as tags
                 FROM tasks t
                 LEFT JOIN users u1 ON t.assigned_to = u1.id
                 LEFT JOIN users u2 ON t.created_by = u2.id
+                LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.is_current = true
+                LEFT JOIN users u3 ON ta.assigned_by = u3.id
                 LEFT JOIN task_tags tt ON t.id = tt.task_id
                 WHERE t.id = $1
-                GROUP BY t.id, u1.full_name, u2.full_name
+                GROUP BY t.id, u1.full_name, u2.full_name, u3.full_name, ta.assigned_at
             `, [id]);
             
             return result.rows.length > 0 ? new Task(result.rows[0]) : null;
@@ -53,10 +59,14 @@ class Task {
                 SELECT t.*, 
                        u1.full_name as assigned_to_name,
                        u2.full_name as created_by_name,
+                       u3.full_name as assigned_by_name,
+                       ta.assigned_at,
                        ARRAY_AGG(tt.tag) FILTER (WHERE tt.tag IS NOT NULL) as tags
                 FROM tasks t
                 LEFT JOIN users u1 ON t.assigned_to = u1.id
                 LEFT JOIN users u2 ON t.created_by = u2.id
+                LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.is_current = true
+                LEFT JOIN users u3 ON ta.assigned_by = u3.id
                 LEFT JOIN task_tags tt ON t.id = tt.task_id
                 WHERE 1=1
             `;
@@ -94,7 +104,7 @@ class Task {
                 params.push(category);
             }
 
-            query += ` GROUP BY t.id, u1.full_name, u2.full_name ORDER BY t.created_at DESC`;
+            query += ` GROUP BY t.id, u1.full_name, u2.full_name, u3.full_name, ta.assigned_at ORDER BY t.created_at DESC`;
 
             if (limit) {
                 paramCount++;

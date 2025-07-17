@@ -1,6 +1,8 @@
 const Task = require('../models/Task');
 const TimeEntry = require('../models/TimeEntry');
+const User = require('../models/User');
 const { sanitizeInput } = require('../utils/helpers');
+const emailService = require('../services/emailService');
 
 class TaskController {
     static async getAllTasks(req, res) {
@@ -83,7 +85,7 @@ class TaskController {
                 return res.status(400).json({ error: 'Invalid assigned user ID' });
             }
 
-            if (!['low', 'medium', 'high'].includes(priority)) {
+            if (!['lowest', 'low', 'medium', 'high', 'critical'].includes(priority)) {
                 return res.status(400).json({ error: 'Invalid priority level' });
             }
 
@@ -115,6 +117,39 @@ class TaskController {
             };
 
             const task = await Task.create(taskData);
+
+            // Track task assignment if assigned to someone
+            if (assignedTo) {
+                await this.trackTaskAssignment(task.id, assignedTo, req.user.id);
+            }
+
+            // Emit real-time update via WebSocket
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('task-created', { task: task.toJSON() });
+                if (assignedTo) {
+                    io.to(`user-${assignedTo}`).emit('task-assigned', { task: task.toJSON() });
+                }
+            }
+
+            // Send email notification to assigned user
+            if (assignedTo && assignedTo !== req.user.id) {
+                try {
+                    const assignedUser = await User.findById(assignedTo);
+                    const assignedByUser = await User.findById(req.user.id);
+                    
+                    if (assignedUser && assignedByUser) {
+                        await emailService.sendTaskAssignmentEmail(
+                            task.toJSON(),
+                            assignedUser.toJSON(),
+                            assignedByUser.toJSON()
+                        );
+                    }
+                } catch (emailError) {
+                    console.error('Failed to send task assignment email:', emailError);
+                    // Don't fail the task creation if email fails
+                }
+            }
 
             res.status(201).json({
                 message: 'Task created successfully',
@@ -176,7 +211,7 @@ class TaskController {
                             break;
 
                         case 'priority':
-                            if (!['low', 'medium', 'high'].includes(value)) {
+                            if (!['lowest', 'low', 'medium', 'high', 'critical'].includes(value)) {
                                 return res.status(400).json({ error: 'Invalid priority level' });
                             }
                             updateData[field] = value;
@@ -229,6 +264,71 @@ class TaskController {
 
             const updatedTask = await task.update(updateData);
 
+            // Track task reassignment if assigned to someone different
+            if (updateData.assignedTo && updateData.assignedTo !== task.assignedTo) {
+                await TaskController.trackTaskAssignment(taskId, updateData.assignedTo, req.user.id);
+            }
+
+            // Emit real-time update via WebSocket
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('task-updated', { task: updatedTask.toJSON() });
+                io.to(`task-${taskId}`).emit('task-changed', { task: updatedTask.toJSON() });
+                
+                // Notify assigned user if task was reassigned
+                if (updateData.assignedTo && updateData.assignedTo !== task.assignedTo) {
+                    io.to(`user-${updateData.assignedTo}`).emit('task-assigned', { task: updatedTask.toJSON() });
+                }
+                
+                // Notify about status changes
+                if (updateData.status && updateData.status !== task.status) {
+                    io.emit('task-status-changed', { 
+                        taskId: taskId, 
+                        oldStatus: task.status, 
+                        newStatus: updateData.status, 
+                        task: updatedTask.toJSON() 
+                    });
+                }
+            }
+
+            // Send email notification if task was completed
+            if (updateData.status === 'completed' && task.status !== 'completed') {
+                try {
+                    const completedByUser = await User.findById(req.user.id);
+                    const taskCreator = await User.findById(task.createdBy);
+                    
+                    if (completedByUser && taskCreator && taskCreator.id !== req.user.id) {
+                        await emailService.sendTaskCompletionEmail(
+                            updatedTask.toJSON(),
+                            completedByUser.toJSON(),
+                            taskCreator.toJSON()
+                        );
+                    }
+                } catch (emailError) {
+                    console.error('Failed to send task completion email:', emailError);
+                    // Don't fail the task update if email fails
+                }
+            }
+
+            // Send email notification if task was reassigned
+            if (updateData.assignedTo && updateData.assignedTo !== task.assignedTo) {
+                try {
+                    const newAssignedUser = await User.findById(updateData.assignedTo);
+                    const assignedByUser = await User.findById(req.user.id);
+                    
+                    if (newAssignedUser && assignedByUser && newAssignedUser.id !== req.user.id) {
+                        await emailService.sendTaskAssignmentEmail(
+                            updatedTask.toJSON(),
+                            newAssignedUser.toJSON(),
+                            assignedByUser.toJSON()
+                        );
+                    }
+                } catch (emailError) {
+                    console.error('Failed to send task reassignment email:', emailError);
+                    // Don't fail the task update if email fails
+                }
+            }
+
             res.json({
                 message: 'Task updated successfully',
                 task: updatedTask.toJSON()
@@ -261,6 +361,13 @@ class TaskController {
             const deleted = await task.delete();
             
             if (deleted) {
+                // Emit real-time update via WebSocket
+                const io = req.app.get('io');
+                if (io) {
+                    io.emit('task-deleted', { taskId: taskId });
+                    io.to(`task-${taskId}`).emit('task-removed', { taskId: taskId });
+                }
+                
                 res.json({ message: 'Task deleted successfully' });
             } else {
                 res.status(500).json({ error: 'Failed to delete task' });
@@ -325,6 +432,30 @@ class TaskController {
             res.json({ entry });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get active timer' });
+        }
+    }
+
+    // Track task assignment
+    static async trackTaskAssignment(taskId, assignedTo, assignedBy) {
+        try {
+            const { pool } = require('../config/database');
+            
+            // Mark previous assignments as not current
+            await pool.query(`
+                UPDATE task_assignments 
+                SET is_current = false 
+                WHERE task_id = $1 AND is_current = true
+            `, [taskId]);
+            
+            // Create new assignment record
+            await pool.query(`
+                INSERT INTO task_assignments (task_id, assigned_to, assigned_by, assigned_at, is_current)
+                VALUES ($1, $2, $3, NOW(), true)
+            `, [taskId, assignedTo, assignedBy]);
+            
+        } catch (error) {
+            console.error('Error tracking task assignment:', error);
+            // Don't throw error to avoid breaking task creation/update
         }
     }
 

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const { validateEmail, validatePassword, sanitizeInput } = require('../utils/helpers');
+const auditService = require('../services/auditService');
 
 class AuthController {
     static async register(req, res) {
@@ -93,17 +94,32 @@ class AuthController {
             // Find user
             const user = await User.findByUsername(sanitizeInput(username));
             if (!user) {
+                // Log failed login attempt
+                await auditService.logAuthentication(null, 'login', false, {
+                    username: sanitizeInput(username),
+                    reason: 'user_not_found'
+                }, req);
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
             // Check if account is active
             if (!user.isActive) {
+                // Log failed login attempt due to inactive account
+                await auditService.logAuthentication(user.id, 'login', false, {
+                    username: sanitizeInput(username),
+                    reason: 'account_inactive'
+                }, req);
                 return res.status(401).json({ error: 'Account is deactivated' });
             }
 
             // Verify password
             const isValidPassword = await user.verifyPassword(password);
             if (!isValidPassword) {
+                // Log failed login attempt due to wrong password
+                await auditService.logAuthentication(user.id, 'login', false, {
+                    username: sanitizeInput(username),
+                    reason: 'invalid_password'
+                }, req);
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
@@ -120,6 +136,11 @@ class AuthController {
 
             // Update last login
             await user.updateLastLogin();
+
+            // Log successful login
+            await auditService.logAuthentication(user.id, 'login', true, {
+                username: sanitizeInput(username)
+            }, req);
 
             res.json({
                 message: 'Login successful',

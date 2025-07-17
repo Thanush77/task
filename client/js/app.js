@@ -28,6 +28,11 @@ class TaskManager {
      */
     async init() {
         try {
+            // Initialize WebSocket connection
+            const user = this.authManager.getUser();
+            if (user && typeof wsClient !== 'undefined') {
+                wsClient.connect(user.id);
+            }
             console.log('🚀 Initializing TaskManager...');
             
             // Load initial data
@@ -135,6 +140,7 @@ class TaskManager {
             this.tasks = response.tasks || response;
             this.renderTasks();
             this.scheduleDeadlineNotifications(); // Schedule notifications after loading tasks
+            this.checkOverdueTasksAndAlert(); // Check for overdue tasks and show alerts
             console.log(`📋 Loaded ${this.tasks.length} tasks`);
         } catch (error) {
             console.error('❌ Failed to load tasks:', error);
@@ -442,6 +448,59 @@ class TaskManager {
             filteredTasks = this.tasks.filter(task => task.status !== 'completed');
         }
 
+        // Sort tasks based on selected sort option
+        const sortBy = document.getElementById('sortTasks')?.value || 'priority';
+        filteredTasks.sort((a, b) => {
+            switch (sortBy) {
+                case 'priority':
+                    // Priority order: critical > high > medium > low > lowest
+                    const priorityOrder = {
+                        'critical': 5,
+                        'high': 4,
+                        'medium': 3,
+                        'low': 2,
+                        'lowest': 1
+                    };
+                    
+                    const aPriority = priorityOrder[a.priority] || 3;
+                    const bPriority = priorityOrder[b.priority] || 3;
+                    
+                    if (aPriority !== bPriority) {
+                        return bPriority - aPriority;
+                    }
+                    
+                    // Secondary sort by due date
+                    const now = new Date();
+                    const aDue = a.due_date ? new Date(a.due_date) : null;
+                    const bDue = b.due_date ? new Date(b.due_date) : null;
+                    
+                    if (!aDue && !bDue) return 0;
+                    if (!aDue) return 1;
+                    if (!bDue) return -1;
+                    
+                    return aDue - bDue;
+                    
+                case 'due_date':
+                    const aDate = a.due_date ? new Date(a.due_date) : null;
+                    const bDate = b.due_date ? new Date(b.due_date) : null;
+                    
+                    if (!aDate && !bDate) return 0;
+                    if (!aDate) return 1;
+                    if (!bDate) return -1;
+                    
+                    return aDate - bDate;
+                    
+                case 'created_at':
+                    return new Date(b.created_at) - new Date(a.created_at);
+                    
+                case 'title':
+                    return a.title.localeCompare(b.title);
+                    
+                default:
+                    return 0;
+            }
+        });
+
         if (filteredTasks.length === 0) {
             tasksList.innerHTML = this.getEmptyTasksHTML();
             return;
@@ -470,6 +529,44 @@ class TaskManager {
         const isCompleted = task.status === 'completed';
         const canEdit = task.created_by === window.authManager.getCurrentUser()?.id || 
                        task.assigned_to === window.authManager.getCurrentUser()?.id;
+        
+        // Check if current user is assigned to this task
+        const currentUser = window.authManager.getCurrentUser();
+        const isAssignedToCurrentUser = currentUser && task.assigned_to === currentUser.id;
+
+        // Calculate due date status
+        const now = new Date();
+        let dueStatus = '';
+        let dueIndicator = '';
+        let taskClasses = `task-item ${priorityClass}`;
+        
+        // Add assigned-to-me class if task is assigned to current user
+        if (isAssignedToCurrentUser) {
+            taskClasses += ' assigned-to-me';
+        }
+        
+        if (task.due_date && !isCompleted) {
+            const dueDateTime = new Date(task.due_date);
+            const msToDue = dueDateTime - now;
+            const daysToDue = Math.ceil(msToDue / (1000 * 60 * 60 * 24));
+            
+            if (msToDue < 0) {
+                // Overdue
+                const daysOverdue = Math.abs(daysToDue);
+                dueStatus = 'overdue';
+                taskClasses += ' overdue';
+                dueIndicator = `<span class="due-indicator overdue">🚨 ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue</span>`;
+            } else if (msToDue <= 24 * 60 * 60 * 1000) {
+                // Due within 24 hours
+                dueStatus = 'due-soon';
+                taskClasses += ' due-soon';
+                const hoursLeft = Math.ceil(msToDue / (1000 * 60 * 60));
+                dueIndicator = `<span class="due-indicator due-soon">⏰ Due in ${hoursLeft}h</span>`;
+            } else if (daysToDue <= 7) {
+                // Due within a week
+                dueIndicator = `<span class="due-indicator due-later">📅 Due in ${daysToDue} day${daysToDue > 1 ? 's' : ''}</span>`;
+            }
+        }
 
         // Time tracking controls
         const timeControls = !isCompleted ? `
@@ -483,9 +580,12 @@ class TaskManager {
         ` : '';
 
         return `
-            <div class="task-item ${priorityClass}" data-task-id="${task.id}">
+            <div class="${taskClasses}" data-task-id="${task.id}">
                 <div class="task-header">
-                    <div class="task-title">${this.escapeHtml(task.title)}</div>
+                    <div class="task-title">
+                        ${this.escapeHtml(task.title)}
+                        ${dueIndicator}
+                    </div>
                     <div class="task-priority ${priorityClass}">${task.priority}</div>
                 </div>
                 
@@ -497,6 +597,10 @@ class TaskManager {
                     <span>⏱️ ${task.estimated_hours}h</span>
                     <span>📂 ${this.escapeHtml(task.category)}</span>
                     ${task.created_by_name ? `<span>👨‍💼 Created by ${this.escapeHtml(task.created_by_name)}</span>` : ''}
+                    ${isAssignedToCurrentUser && task.assigned_by_name ? 
+                        `<span class="assignment-info">✋ Assigned by ${this.escapeHtml(task.assigned_by_name)}</span>` : ''}
+                    ${isAssignedToCurrentUser && task.assigned_at ? 
+                        `<span class="assignment-info">⏰ Assigned on ${new Date(task.assigned_at).toLocaleDateString()} at ${new Date(task.assigned_at).toLocaleTimeString()}</span>` : ''}
                 </div>
                 
                 ${tags ? `<div class="task-tags">${tags}</div>` : ''}
@@ -582,6 +686,7 @@ class TaskManager {
         document.getElementById('statusFilter').value = '';
         document.getElementById('priorityFilter').value = '';
         document.getElementById('searchTasks').value = '';
+        document.getElementById('sortTasks').value = 'priority';
         
         this.currentFilters = {};
         this.loadTasks();
@@ -1015,6 +1120,107 @@ class TaskManager {
             });
         }
     }
+
+    // Check for overdue tasks and show webpage alerts
+    checkOverdueTasksAndAlert() {
+        const now = new Date();
+        const currentUser = window.authManager?.getCurrentUser?.();
+        
+        if (!currentUser) return;
+        
+        // Find overdue tasks assigned to current user
+        const overdueTasks = this.tasks.filter(task => {
+            if (!task.due_date || task.status === 'completed') return false;
+            if (task.assigned_to !== currentUser.id) return false;
+            
+            const dueDate = new Date(task.due_date);
+            return dueDate < now;
+        });
+
+        // Find tasks due within 24 hours
+        const dueSoonTasks = this.tasks.filter(task => {
+            if (!task.due_date || task.status === 'completed') return false;
+            if (task.assigned_to !== currentUser.id) return false;
+            
+            const dueDate = new Date(task.due_date);
+            const msToDue = dueDate - now;
+            return msToDue > 0 && msToDue <= 24 * 60 * 60 * 1000;
+        });
+
+        // Show overdue alert
+        if (overdueTasks.length > 0) {
+            const overdueCount = overdueTasks.length;
+            const message = `🚨 You have ${overdueCount} overdue task${overdueCount > 1 ? 's' : ''}!`;
+            showNotification(message, 'error');
+            
+            // Show detailed overdue tasks
+            setTimeout(() => {
+                this.showOverdueTasksModal(overdueTasks);
+            }, 2000);
+        }
+
+        // Show due soon alert
+        if (dueSoonTasks.length > 0) {
+            const dueSoonCount = dueSoonTasks.length;
+            const message = `⏰ You have ${dueSoonCount} task${dueSoonCount > 1 ? 's' : ''} due within 24 hours.`;
+            showNotification(message, 'warning');
+        }
+    }
+
+    // Show modal with overdue tasks
+    showOverdueTasksModal(overdueTasks) {
+        if (overdueTasks.length === 0) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal overdue-modal active';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🚨 Overdue Tasks</h2>
+                    <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
+                </div>
+                <div class="overdue-tasks-list">
+                    ${overdueTasks.map(task => {
+                        const daysOverdue = Math.floor((new Date() - new Date(task.due_date)) / (1000 * 60 * 60 * 24));
+                        return `
+                            <div class="overdue-task-item">
+                                <div class="task-info">
+                                    <div class="task-title">${this.escapeHtml(task.title)}</div>
+                                    <div class="task-due">
+                                        Due: ${new Date(task.due_date).toLocaleDateString()} 
+                                        (${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue)
+                                    </div>
+                                    <div class="task-priority priority-${task.priority}">${task.priority} priority</div>
+                                </div>
+                                <div class="task-actions">
+                                    <button class="btn btn-small btn-primary" onclick="taskManager.editTask(${task.id}); this.closest('.modal').remove();">
+                                        Edit Task
+                                    </button>
+                                    <button class="btn btn-small btn-success" onclick="taskManager.completeTask(${task.id}); this.closest('.modal').remove();">
+                                        Mark Complete
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">
+                        Close
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Auto-close after 30 seconds
+        setTimeout(() => {
+            if (modal.parentNode) {
+                modal.remove();
+            }
+        }, 30000);
+    }
 }
 
 // Add a property to TaskManager to track the current filter
@@ -1099,6 +1305,9 @@ window.showTab = function(tabName) {
         window.taskManager.loadTasks();
     } else if (tabName === 'team' && window.taskManager) {
         window.taskManager.loadUsers();
+    } else if (tabName === 'reports') {
+        // Load reports when reports tab is selected
+        fetchAndRenderReports();
     }
 };
 
@@ -1227,58 +1436,176 @@ async function fetchAndRenderReports() {
     const query = params.length ? `?${params.join('&')}` : '';
 
     try {
+        // Overview Statistics
+        const overviewStats = await window.api.request(`/reports/overview-stats${query}`);
+        renderOverviewStats(overviewStats);
+    } catch (error) {
+        console.error('Failed to load overview stats:', error);
+        renderOverviewStats({
+            total_tasks: 0,
+            completed_tasks: 0,
+            avg_completion_hours: 0,
+            completion_rate: 0
+        });
+    }
+
+    try {
         // Task Statistics
         const taskStats = await window.api.request(`/reports/task-stats${query}`);
-        if (!taskStats || Object.keys(taskStats).length === 0) {
-            showNotification('No task statistics data found for the selected range.', 'info');
-        }
         renderTaskStatsChart(taskStats);
     } catch (error) {
-        showNotification('Failed to load task statistics report.', 'error');
+        console.error('Failed to load task statistics:', error);
         renderTaskStatsChart({completed:0, pending:0, in_progress:0, cancelled:0});
+    }
+
+    try {
+        // Priority Statistics
+        const priorityStats = await window.api.request(`/reports/priority-stats${query}`);
+        renderPriorityStatsChart(priorityStats);
+    } catch (error) {
+        console.error('Failed to load priority stats:', error);
+        renderPriorityStatsChart([]);
     }
 
     try {
         // User Productivity
         const userProductivity = await window.api.request(`/reports/user-productivity${query}`);
-        if (!userProductivity || userProductivity.length === 0) {
-            showNotification('No user productivity data found for the selected range.', 'info');
-        }
         renderUserProductivityChart(userProductivity);
     } catch (error) {
-        showNotification('Failed to load user productivity report.', 'error');
+        console.error('Failed to load user productivity:', error);
         renderUserProductivityChart([]);
     }
 
     try {
         // Time Tracking
         const timeTracking = await window.api.request(`/reports/time-tracking${query}`);
-        if (!timeTracking || timeTracking.length === 0) {
-            showNotification('No time tracking data found for the selected range.', 'info');
-        }
         renderTimeTracking(timeTracking);
     } catch (error) {
-        showNotification('Failed to load time tracking report.', 'error');
+        console.error('Failed to load time tracking:', error);
         renderTimeTracking([]);
     }
+
+    try {
+        // Completion Trend
+        const completionTrend = await window.api.request(`/reports/completion-trend${query}`);
+        renderCompletionTrend(completionTrend);
+    } catch (error) {
+        console.error('Failed to load completion trend:', error);
+        renderCompletionTrend([]);
+    }
+
+    try {
+        // Category Performance
+        const categoryStats = await window.api.request(`/reports/category-stats${query}`);
+        renderCategoryChart(categoryStats);
+    } catch (error) {
+        console.error('Failed to load category stats:', error);
+        renderCategoryChart([]);
+    }
+
+    try {
+        // Overdue Tasks
+        const overdueTasks = await window.api.request(`/reports/overdue-tasks`);
+        renderOverdueTasks(overdueTasks);
+    } catch (error) {
+        console.error('Failed to load overdue tasks:', error);
+        renderOverdueTasks([]);
+    }
+}
+
+// Enhanced rendering functions
+function renderOverviewStats(stats) {
+    const elements = {
+        analyticsTotal: document.getElementById('analyticsTotal'),
+        analyticsCompleted: document.getElementById('analyticsCompleted'),
+        analyticsAvgTime: document.getElementById('analyticsAvgTime'),
+        analyticsCompletionRate: document.getElementById('analyticsCompletionRate')
+    };
+
+    if (elements.analyticsTotal) {
+        elements.analyticsTotal.textContent = stats.total_tasks || 0;
+    }
+    if (elements.analyticsCompleted) {
+        elements.analyticsCompleted.textContent = stats.completed_tasks || 0;
+    }
+    if (elements.analyticsAvgTime) {
+        elements.analyticsAvgTime.textContent = stats.avg_completion_hours ? 
+            `${stats.avg_completion_hours}h` : '0h';
+    }
+    if (elements.analyticsCompletionRate) {
+        elements.analyticsCompletionRate.textContent = stats.completion_rate ? 
+            `${stats.completion_rate}%` : '0%';
+    }
+
+    // Add animation to updated numbers
+    Object.values(elements).forEach(el => {
+        if (el) {
+            el.classList.add('animate-pulse');
+            setTimeout(() => el.classList.remove('animate-pulse'), 1000);
+        }
+    });
 }
 
 function renderTaskStatsChart(stats) {
     const container = document.getElementById('taskStatsChart');
     if (!container) return;
+    
     container.innerHTML = '<canvas id="taskStatsCanvas" height="120"></canvas>';
     const ctx = document.getElementById('taskStatsCanvas').getContext('2d');
     if (taskStatsChartInstance) taskStatsChartInstance.destroy();
+    
     taskStatsChartInstance = new Chart(ctx, {
-        type: 'bar',
+        type: 'doughnut',
         data: {
             labels: ['Completed', 'Pending', 'In Progress', 'Cancelled'],
             datasets: [{
-                label: 'Tasks',
                 data: [stats.completed, stats.pending, stats.in_progress, stats.cancelled],
                 backgroundColor: [
                     '#4caf50', '#ff9800', '#2196f3', '#f44336'
-                ]
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPriorityStatsChart(data) {
+    const container = document.getElementById('priorityStatsChart');
+    if (!container) return;
+    
+    container.innerHTML = '<canvas id="priorityStatsCanvas" height="120"></canvas>';
+    const ctx = document.getElementById('priorityStatsCanvas').getContext('2d');
+    
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(item => item.priority.charAt(0).toUpperCase() + item.priority.slice(1)),
+            datasets: [{
+                label: 'Total',
+                data: data.map(item => item.total),
+                backgroundColor: data.map(item => {
+                    switch(item.priority) {
+                        case 'critical': return '#9c27b0';
+                        case 'high': return '#f44336';
+                        case 'medium': return '#ff9800';
+                        case 'low': return '#4caf50';
+                        case 'lowest': return '#2196f3';
+                        default: return '#9e9e9e';
+                    }
+                })
             }]
         },
         options: {
@@ -1292,9 +1619,16 @@ function renderTaskStatsChart(stats) {
 function renderUserProductivityChart(data) {
     const container = document.getElementById('userProductivityTable');
     if (!container) return;
+    
+    if (data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No productivity data available</p></div>';
+        return;
+    }
+    
     container.innerHTML = '<canvas id="userProductivityCanvas" height="120"></canvas>';
     const ctx = document.getElementById('userProductivityCanvas').getContext('2d');
     if (userProductivityChartInstance) userProductivityChartInstance.destroy();
+    
     userProductivityChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -1304,8 +1638,8 @@ function renderUserProductivityChart(data) {
                 data: data.map(u => u.completed_tasks),
                 backgroundColor: '#4caf50'
             }, {
-                label: 'Total Time (min)',
-                data: data.map(u => u.total_minutes),
+                label: 'Total Time (hours)',
+                data: data.map(u => Math.round(u.total_minutes / 60)),
                 backgroundColor: '#2196f3'
             }]
         },
@@ -1319,12 +1653,205 @@ function renderUserProductivityChart(data) {
 function renderTimeTracking(data) {
     const container = document.getElementById('timeTrackingTable');
     if (!container) return;
-    let html = `<table class="report-table"><thead><tr><th>User</th><th>Task</th><th>Entries</th><th>Total Time (min)</th><th>Avg Time (min)</th></tr></thead><tbody>`;
+    
+    if (data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No time tracking data available</p></div>';
+        return;
+    }
+    
+    let html = `<table class="report-table">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Task</th>
+                <th>Entries</th>
+                <th>Total Time</th>
+                <th>Avg Time</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    
     data.forEach(row => {
-        html += `<tr><td>${row.username}</td><td>${row.title || '-'}</td><td>${row.entries}</td><td>${row.total_minutes}</td><td>${row.avg_minutes}</td></tr>`;
+        const totalHours = Math.floor(row.total_minutes / 60);
+        const totalMins = row.total_minutes % 60;
+        const avgHours = Math.floor(row.avg_minutes / 60);
+        const avgMins = Math.round(row.avg_minutes % 60);
+        
+        html += `<tr>
+            <td>${row.username}</td>
+            <td>${row.title || '-'}</td>
+            <td>${row.entries}</td>
+            <td>${totalHours}h ${totalMins}m</td>
+            <td>${avgHours}h ${avgMins}m</td>
+        </tr>`;
     });
+    
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+function renderCompletionTrend(data) {
+    const container = document.getElementById('trendChart');
+    if (!container) return;
+    
+    container.innerHTML = '<canvas id="trendCanvas" height="120"></canvas>';
+    const ctx = document.getElementById('trendCanvas').getContext('2d');
+    
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(item => new Date(item.date).toLocaleDateString()),
+            datasets: [{
+                label: 'Tasks Completed',
+                data: data.map(item => item.completed_tasks),
+                borderColor: '#4caf50',
+                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function renderCategoryChart(data) {
+    const container = document.getElementById('categoryChart');
+    if (!container) return;
+    
+    container.innerHTML = '<canvas id="categoryCanvas" height="120"></canvas>';
+    const ctx = document.getElementById('categoryCanvas').getContext('2d');
+    
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(item => item.category.charAt(0).toUpperCase() + item.category.slice(1)),
+            datasets: [{
+                label: 'Total Tasks',
+                data: data.map(item => item.total),
+                backgroundColor: '#2196f3'
+            }, {
+                label: 'Completed',
+                data: data.map(item => item.completed),
+                backgroundColor: '#4caf50'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function renderOverdueTasks(data) {
+    const container = document.getElementById('overdueTasksList');
+    if (!container) return;
+    
+    if (data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>🎉 No overdue tasks!</p></div>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(task => {
+        const priorityClass = task.priority || 'medium';
+        const daysOverdue = Math.floor(task.days_overdue);
+        
+        html += `<div class="alert-item">
+            <div class="alert-item-content">
+                <div class="alert-item-title">
+                    <span class="priority-indicator ${priorityClass}"></span>
+                    ${task.title}
+                </div>
+                <div class="alert-item-meta">
+                    Assigned to: ${task.assigned_to_name || 'Unassigned'} | 
+                    Due: ${new Date(task.due_date).toLocaleDateString()} | 
+                    Overdue by: ${daysOverdue} days
+                </div>
+            </div>
+            <div class="alert-item-actions">
+                <button class="btn btn-small btn-primary" onclick="taskManager.editTask(${task.id})">
+                    Edit
+                </button>
+            </div>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// =================== Reports Event Listeners ===================
+
+function setupReportsEventListeners() {
+    // Apply filters button
+    const applyFiltersBtn = document.getElementById('applyReportFilters');
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', fetchAndRenderReports);
+    }
+
+    // Reset filters button
+    const resetFiltersBtn = document.getElementById('resetReportFilters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            document.getElementById('reportStartDate').value = '';
+            document.getElementById('reportEndDate').value = '';
+            fetchAndRenderReports();
+        });
+    }
+
+    // Export buttons
+    const exportCSVBtn = document.getElementById('exportCSV');
+    if (exportCSVBtn) {
+        exportCSVBtn.addEventListener('click', () => exportReport('csv'));
+    }
+
+    const exportPDFBtn = document.getElementById('exportPDF');
+    if (exportPDFBtn) {
+        exportPDFBtn.addEventListener('click', () => exportReport('pdf'));
+    }
+}
+
+async function exportReport(format) {
+    try {
+        const startDate = document.getElementById('reportStartDate').value;
+        const endDate = document.getElementById('reportEndDate').value;
+        const params = new URLSearchParams();
+        
+        params.append('type', format);
+        params.append('report', 'task-stats');
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+
+        const response = await fetch(`/api/reports/export?${params}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${window.authManager.getToken()}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Export failed: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `task-report-${new Date().toISOString().split('T')[0]}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showNotification(`Report exported successfully as ${format.toUpperCase()}!`, 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification('Failed to export report. Please try again.', 'error');
+    }
 }
 
 // =================== Application Initialization ===================
@@ -1357,6 +1884,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    
+    // Setup reports functionality
+    setupReportsEventListeners();
     
     // Hide loading screen after short delay
     setTimeout(() => {

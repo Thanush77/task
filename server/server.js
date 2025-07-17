@@ -3,6 +3,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
+const socketIo = require('socket.io');
 require('dotenv').config();
 
 const { initDatabase } = require('./config/database');
@@ -10,8 +12,25 @@ const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
 const userRoutes = require('./routes/users');
 const reportsRoutes = require('./routes/reports');
+const fileRoutes = require('./routes/files');
+const schedulerService = require('./services/schedulerService');
+const auditService = require('./services/auditService');
+const {
+    rateLimits,
+    ipBlockingMiddleware,
+    validateRequest,
+    securityLogger,
+    sanitizeInput
+} = require('./middleware/securityMiddleware');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+    cors: {
+        origin: process.env.FRONTEND_URL || "http://localhost:8080",
+        methods: ["GET", "POST"]
+    }
+});
 const PORT = process.env.PORT || 3000;
 
 // Trust proxy for correct client IP handling (needed for rate limiting and proxies)
@@ -44,17 +63,20 @@ app.use(cors({
     credentials: true
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-    message: {
-        error: 'Too many requests from this IP, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-app.use('/api/', limiter);
+// Security middleware
+app.use(ipBlockingMiddleware);
+app.use(securityLogger);
+app.use(validateRequest);
+app.use(sanitizeInput);
+
+// Rate limiting - general API
+app.use('/api/', rateLimits.api);
+
+// Specific rate limits for auth endpoints
+app.use('/api/auth', rateLimits.auth);
+
+// Rate limiting for file uploads
+app.use('/api/files/upload', rateLimits.upload);
 
 // Logging
 if (process.env.NODE_ENV !== 'test') {
@@ -68,11 +90,42 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files
 app.use(express.static('public'));
 
+// Make io available to routes
+app.set('io', io);
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+    console.log('👤 User connected:', socket.id);
+    
+    // Join user to their own room for private notifications
+    socket.on('join-user-room', (userId) => {
+        socket.join(`user-${userId}`);
+        console.log(`👤 User ${userId} joined their room`);
+    });
+    
+    // Join task room for task-specific updates
+    socket.on('join-task-room', (taskId) => {
+        socket.join(`task-${taskId}`);
+        console.log(`📋 User joined task room: ${taskId}`);
+    });
+    
+    // Leave task room
+    socket.on('leave-task-room', (taskId) => {
+        socket.leave(`task-${taskId}`);
+        console.log(`📋 User left task room: ${taskId}`);
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('👤 User disconnected:', socket.id);
+    });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/files', fileRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -125,16 +178,20 @@ const startServer = async () => {
     try {
         await initDatabase();
         
-        const server = app.listen(PORT, () => {
+        server.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
             console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:8080'}`);
+            
+            // Start scheduler service
+            schedulerService.start();
         });
 
         // Graceful shutdown
         process.on('SIGTERM', () => {
             console.log('SIGTERM received, shutting down gracefully');
+            schedulerService.stop();
             server.close(() => {
                 console.log('Process terminated');
                 process.exit(0);

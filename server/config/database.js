@@ -98,6 +98,49 @@ const initDatabase = async () => {
             )
         `);
 
+        // Create task_attachments table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS task_attachments (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                filename VARCHAR(255) NOT NULL,
+                original_name VARCHAR(255) NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                mime_type VARCHAR(100) NOT NULL,
+                uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create audit_logs table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                action VARCHAR(100) NOT NULL,
+                details JSONB,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                ip_address INET,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create task_assignments table for tracking assignment history
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS task_assignments (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                assigned_to INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                assigned_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_current BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         // Create indexes for better performance
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
@@ -109,6 +152,16 @@ const initDatabase = async () => {
             CREATE INDEX IF NOT EXISTS idx_task_tags_tag ON task_tags(tag);
             CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
             CREATE INDEX IF NOT EXISTS idx_time_entries_user_id ON time_entries(user_id);
+            CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id);
+            CREATE INDEX IF NOT EXISTS idx_task_attachments_uploaded_by ON task_attachments(uploaded_by);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_ip_address ON audit_logs(ip_address);
+            CREATE INDEX IF NOT EXISTS idx_task_assignments_task_id ON task_assignments(task_id);
+            CREATE INDEX IF NOT EXISTS idx_task_assignments_assigned_to ON task_assignments(assigned_to);
+            CREATE INDEX IF NOT EXISTS idx_task_assignments_assigned_by ON task_assignments(assigned_by);
+            CREATE INDEX IF NOT EXISTS idx_task_assignments_is_current ON task_assignments(is_current);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         `);
@@ -140,9 +193,40 @@ const initDatabase = async () => {
             CREATE TRIGGER update_time_entries_updated_at 
                 BEFORE UPDATE ON time_entries 
                 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+                
+            DROP TRIGGER IF EXISTS update_task_attachments_updated_at ON task_attachments;
+            CREATE TRIGGER update_task_attachments_updated_at 
+                BEFORE UPDATE ON task_attachments 
+                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         `);
 
         console.log('📋 Database tables and indexes created successfully');
+        
+        // Run migration to populate existing task assignments
+        try {
+            await pool.query(`
+                INSERT INTO task_assignments (task_id, assigned_to, assigned_by, assigned_at, is_current)
+                SELECT 
+                    t.id as task_id,
+                    t.assigned_to,
+                    COALESCE(t.created_by, t.assigned_to) as assigned_by,
+                    t.created_at as assigned_at,
+                    true as is_current
+                FROM tasks t
+                WHERE t.assigned_to IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM task_assignments ta 
+                    WHERE ta.task_id = t.id 
+                    AND ta.assigned_to = t.assigned_to 
+                    AND ta.is_current = true
+                )
+            `);
+            console.log('📋 Task assignments populated successfully');
+        } catch (error) {
+            // This is expected to fail if data already exists, which is fine
+            console.log('📋 Task assignments already populated or migration not needed');
+        }
+        
     } catch (error) {
         console.error('❌ Database initialization error:', error);
         throw error;
