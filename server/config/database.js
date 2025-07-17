@@ -1,11 +1,19 @@
 const { Pool } = require('pg');
 
+// Debug environment variables (don't log password in production)
+console.log('📊 Database Config:');
+console.log('- Host:', process.env.DB_HOST);
+console.log('- Database:', process.env.DB_NAME);
+console.log('- User:', process.env.DB_USER);
+console.log('- Port:', process.env.DB_PORT);
+console.log('- Password length:', process.env.DB_PASSWORD ? process.env.DB_PASSWORD.length : 'undefined');
+
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: Number(process.env.DB_PORT),
+    user: String(process.env.DB_USER || ''),
+    host: String(process.env.DB_HOST || ''),
+    database: String(process.env.DB_NAME || ''),
+    password: String(process.env.DB_PASSWORD || ''),
+    port: Number(process.env.DB_PORT) || 5432,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
