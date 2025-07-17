@@ -235,11 +235,19 @@
                         </select>
                         <select id="priorityFilter" onchange="filterTasks()">
                             <option value="">All Priorities</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
+                            <option value="critical">🟣 Critical</option>
+                            <option value="high">🔴 High</option>
+                            <option value="medium">🟡 Medium</option>
+                            <option value="low">🟢 Low</option>
+                            <option value="lowest">🔵 Lowest</option>
                         </select>
                         <input type="text" id="searchTasks" placeholder="Search tasks..." onkeyup="searchTasks()">
+                        <select id="sortTasks" onchange="filterTasks()">
+                            <option value="priority">Sort by Priority</option>
+                            <option value="due_date">Sort by Due Date</option>
+                            <option value="created_at">Sort by Created Date</option>
+                            <option value="title">Sort by Title</option>
+                        </select>
                     </div>
                     <button class="btn btn-primary" onclick="openCreateTaskModal()">
                         ➕ New Task
@@ -293,17 +301,94 @@
                 </div>
             </div>
             <div class="reports-content">
-                <div id="taskStatsReport" class="report-section">
-                    <h3>Task Statistics</h3>
-                    <div id="taskStatsChart"></div>
+                <!-- Overview Cards -->
+                <div class="analytics-overview">
+                    <div class="overview-card">
+                        <div class="card-icon">📊</div>
+                        <div class="card-content">
+                            <div class="card-title">Total Tasks</div>
+                            <div class="card-value" id="analyticsTotal">0</div>
+                            <div class="card-trend positive" id="analyticsTotalTrend">↗ 0%</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon">✅</div>
+                        <div class="card-content">
+                            <div class="card-title">Completed</div>
+                            <div class="card-value" id="analyticsCompleted">0</div>
+                            <div class="card-trend positive" id="analyticsCompletedTrend">↗ 0%</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon">⏱️</div>
+                        <div class="card-content">
+                            <div class="card-title">Avg Completion Time</div>
+                            <div class="card-value" id="analyticsAvgTime">0h</div>
+                            <div class="card-trend neutral" id="analyticsAvgTimeTrend">— 0%</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon">🎯</div>
+                        <div class="card-content">
+                            <div class="card-title">Completion Rate</div>
+                            <div class="card-value" id="analyticsCompletionRate">0%</div>
+                            <div class="card-trend positive" id="analyticsCompletionRateTrend">↗ 0%</div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Task Status Distribution -->
+                <div id="taskStatsReport" class="report-section">
+                    <h3>Task Status Distribution</h3>
+                    <div class="chart-container">
+                        <div id="taskStatsChart"></div>
+                    </div>
+                </div>
+
+                <!-- Priority Distribution -->
+                <div id="priorityStatsReport" class="report-section">
+                    <h3>Priority Distribution</h3>
+                    <div class="chart-container">
+                        <div id="priorityStatsChart"></div>
+                    </div>
+                </div>
+
+                <!-- User Productivity -->
                 <div id="userProductivityReport" class="report-section">
                     <h3>User Productivity</h3>
-                    <div id="userProductivityTable"></div>
+                    <div class="chart-container">
+                        <div id="userProductivityTable"></div>
+                    </div>
                 </div>
+
+                <!-- Time Tracking Analytics -->
                 <div id="timeTrackingReport" class="report-section">
-                    <h3>Time Tracking</h3>
-                    <div id="timeTrackingTable"></div>
+                    <h3>Time Tracking Analytics</h3>
+                    <div class="chart-container">
+                        <div id="timeTrackingTable"></div>
+                    </div>
+                </div>
+
+                <!-- Task Completion Trends -->
+                <div id="trendReport" class="report-section">
+                    <h3>Task Completion Trends</h3>
+                    <div class="chart-container">
+                        <div id="trendChart"></div>
+                    </div>
+                </div>
+
+                <!-- Category Performance -->
+                <div id="categoryReport" class="report-section">
+                    <h3>Category Performance</h3>
+                    <div class="chart-container">
+                        <div id="categoryChart"></div>
+                    </div>
+                </div>
+
+                <!-- Overdue Tasks Alert -->
+                <div id="overdueReport" class="report-section alert-section">
+                    <h3>🚨 Overdue Tasks</h3>
+                    <div id="overdueTasksList" class="alert-list"></div>
                 </div>
             </div>
         </div>
@@ -344,9 +429,11 @@
                     <div class="form-group">
                         <label for="taskPriority">Priority</label>
                         <select id="taskPriority">
+                            <option value="lowest">🔵 Lowest</option>
                             <option value="low">🟢 Low</option>
                             <option value="medium" selected>🟡 Medium</option>
                             <option value="high">🔴 High</option>
+                            <option value="critical">🟣 Critical</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -381,7 +468,11 @@
 
                 <div class="form-group">
                     <label for="taskTags">Tags</label>
-                    <input type="text" id="taskTags" placeholder="Add tags (comma separated)">
+                    <div class="tag-input-container">
+                        <div class="tag-display" id="tagDisplay"></div>
+                        <input type="text" id="taskTags" placeholder="Add tags (press Enter or comma to add)">
+                        <div class="tag-suggestions" id="tagSuggestions"></div>
+                    </div>
                     <small>Example: urgent, client-work, frontend</small>
                 </div>
 
@@ -430,7 +521,8 @@
     <div id="notificationContainer" class="notification-container"></div>
 
     <!-- Scripts -->
-    <script src="js/config.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="js/websocket.js"></script>
     <script src="js/app.min.js"></script>
 </body>
 </html>

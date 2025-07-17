@@ -7,12 +7,12 @@
     "dev": "live-server --port=3001 --entry-file=index.html",
     "build": "npm run minify-css && npm run minify-js && npm run postbuild",
     "minify-css": "mkdir -p public/css && cleancss -o public/css/styles.min.css css/styles.css",
-    "minify-js": "mkdir -p public/js && terser js/config.js js/auth.js js/api.js js/app.js -o public/js/app.min.js",
+    "minify-js": "mkdir -p public/js && terser js/auth.js js/api.js js/app.js -o public/js/app.min.js",
     "lint": "eslint js/*.js",
     "lint:fix": "eslint js/*.js --fix",
     "serve": "python3 -m http.server 3001",
     "validate": "html-validate index.html",
-    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/ && mkdir -p public/js && cp -f js/config.js public/js/"
+    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/ && mkdir -p public/js"
   },
   "devDependencies": {
     "clean-css-cli": "^5.6.2",
