@@ -12,7 +12,9 @@
     "lint:fix": "eslint js/*.js --fix",
     "serve": "python3 -m http.server 3001",
     "validate": "html-validate index.html",
-    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/ && mkdir -p public/js"
+    "postbuild": "mkdir -p public && cp -f index.html public/ && cp -f manifest.json public/ && cp -f sw.js public/ && cp -r images public/ && cp -r assets public/ && mkdir -p public/js",
+    "deploy": "npm run build && npx vercel --prod",
+    "deploy:dev": "npm run build && npx vercel"
   },
   "devDependencies": {
     "clean-css-cli": "^5.6.2",
@@ -24,6 +26,7 @@
   },
   "keywords": [
     "task-management",
+ 
     "frontend",
     "spa"
   ],
