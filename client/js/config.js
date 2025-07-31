@@ -14,9 +14,9 @@ const getAPIBaseURL = () => {
         return `${protocol}//${hostname}/api`;
     }
     
-    // Vercel deployment
+    // Vercel deployment - temporarily use EC2 server
     if (hostname.includes('vercel.app')) {
-        return `${protocol}//${hostname}/api`;
+        return 'http://54.80.7.27:3000/api';
     }
     
     // Development environment
