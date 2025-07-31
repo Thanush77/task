@@ -10,13 +10,13 @@ const getAPIBaseURL = () => {
     const protocol = window.location.protocol;
     
     // Always use EC2 server for API calls
-    return 'http://54.80.7.27:3000/api';
+    return 'http://54.80.7.27/api';
 };
 
 // Global configuration object
 window.APP_CONFIG = {
     API_BASE_URL: getAPIBaseURL(),
-    WS_URL: 'ws://54.80.7.27:3000',
+    WS_URL: 'ws://54.80.7.27',
     APP_NAME: 'TaskFlow Analytics',
     VERSION: '2.0.1',
     FEATURES: {
