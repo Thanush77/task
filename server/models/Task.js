@@ -304,6 +304,7 @@ class Task {
             category: this.category,
             status: this.status,
             estimatedHours: this.estimatedHours,
+            estimated_hours: this.estimatedHours,
             actualHours: this.actualHours,
             startDate: this.startDate,
             dueDate: this.dueDate,
@@ -312,6 +313,10 @@ class Task {
             updatedAt: this.updatedAt,
             assignedToName: this.assignedToName,
             createdByName: this.createdByName,
+            assigned_to_name: this.assignedToName,
+            created_by_name: this.createdByName,
+            assigned_by_name: this.assignedByName,
+            assigned_at: this.assignedAt,
             tags: this.tags
         };
     }

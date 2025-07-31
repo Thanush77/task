@@ -15,4 +15,14 @@ router.get('/category-stats', ReportsController.getCategoryStats);
 router.get('/overdue-tasks', ReportsController.getOverdueTasks);
 router.get('/completion-trend', ReportsController.getCompletionTrend);
 
+// Advanced analytics routes
+router.get('/team-performance', ReportsController.getTeamPerformance);
+router.get('/workload-distribution', ReportsController.getWorkloadDistribution);
+router.get('/time-analytics', ReportsController.getTimeAnalytics);
+router.get('/comprehensive', ReportsController.getComprehensiveReport);
+
+// New advanced analytics endpoints
+router.get('/predictive-analytics', ReportsController.getPredictiveAnalytics);
+router.get('/real-time-dashboard', ReportsController.getRealTimeDashboard);
+
 module.exports = router; 

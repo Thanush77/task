@@ -17,9 +17,9 @@ const pool = new Pool({
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
-    ssl: {
+    ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false // required for AWS RDS
-    }
+    } : false
 });
 
 // Test database connection
@@ -65,7 +65,7 @@ const initDatabase = async () => {
                 description TEXT,
                 assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
                 created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                priority VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+                priority VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('lowest', 'low', 'medium', 'high', 'critical')),
                 category VARCHAR(50) DEFAULT 'general',
                 status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in-progress', 'completed', 'cancelled')),
                 estimated_hours DECIMAL(5,2) DEFAULT 1.0 CHECK (estimated_hours > 0),

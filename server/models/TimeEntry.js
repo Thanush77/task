@@ -16,7 +16,7 @@ class TimeEntry {
     static async start(taskId, userId) {
         // End any previous active entry for this user/task
         await pool.query(
-            `UPDATE time_entries SET end_time = NOW(), duration = EXTRACT(EPOCH FROM (NOW() - start_time))/60
+            `UPDATE time_entries SET end_time = NOW(), duration = GREATEST(1, ROUND(EXTRACT(EPOCH FROM (NOW() - start_time))/60))
              WHERE task_id = $1 AND user_id = $2 AND end_time IS NULL`,
             [taskId, userId]
         );
@@ -31,8 +31,9 @@ class TimeEntry {
     static async pause(taskId, userId) {
         // End the current active entry
         const result = await pool.query(
-            `UPDATE time_entries SET end_time = NOW(), duration = EXTRACT(EPOCH FROM (NOW() - start_time))/60
-             WHERE task_id = $1 AND user_id = $2 AND end_time IS NULL RETURNING *`,
+            `UPDATE time_entries SET end_time = NOW(), duration = GREATEST(1, ROUND(EXTRACT(EPOCH FROM (NOW() - start_time))/60))
+             WHERE task_id = $1 AND user_id = $2 AND end_time IS NULL 
+             RETURNING *`,
             [taskId, userId]
         );
         return result.rows.length > 0 ? new TimeEntry(result.rows[0]) : null;

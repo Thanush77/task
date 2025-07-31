@@ -120,7 +120,7 @@ class TaskController {
 
             // Track task assignment if assigned to someone
             if (assignedTo) {
-                await this.trackTaskAssignment(task.id, assignedTo, req.user.id);
+                await TaskController.trackTaskAssignment(task.id, assignedTo, req.user.id);
             }
 
             // Emit real-time update via WebSocket
@@ -419,7 +419,8 @@ class TaskController {
             const entry = await TimeEntry.pause(taskId, userId);
             res.json({ message: 'Timer paused', entry });
         } catch (error) {
-            res.status(500).json({ error: 'Failed to pause timer' });
+            console.error('Pause timer error:', error);
+            res.status(500).json({ error: 'Failed to pause timer', details: error.message });
         }
     }
 

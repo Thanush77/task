@@ -204,9 +204,19 @@ const startServer = async () => {
     }
 };
 
-// Start server only if not in test mode
-if (process.env.NODE_ENV !== 'test') {
-    startServer();
+// For Vercel serverless deployment
+if (process.env.VERCEL) {
+    // Initialize database for serverless
+    initDatabase().catch(error => {
+        console.error('❌ Database initialization failed:', error);
+    });
+    
+    // Export the app for Vercel
+    module.exports = app;
+} else {
+    // Start server only if not in test mode
+    if (process.env.NODE_ENV !== 'test') {
+        startServer();
+    }
+    module.exports = app;
 }
-
-module.exports = app;

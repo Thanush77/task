@@ -18,6 +18,7 @@ router.delete('/:id', TaskController.deleteTask);
 // Time tracking endpoints
 router.post('/:id/time/start', TaskController.startTime);
 router.post('/:id/time/pause', TaskController.pauseTime);
+router.post('/:id/time/stop', TaskController.pauseTime); // Stop is same as pause
 router.get('/:id/time/active', TaskController.getActiveTime);
 router.get('/:id/time/history', TaskController.getTimeHistory);
 

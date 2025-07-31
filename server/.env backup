@@ -1,0 +1,54 @@
+
+
+# Server port
+PORT=3000
+
+# Database configuration
+NODE_ENV=production
+
+DB_HOST=prestige-park-groove.cb4e4w6y2od4.us-east-1.rds.amazonaws.com
+DB_PORT=5432
+DB_NAME=taskflow
+DB_USER=postgres
+DB_PASSWORD=Thanush04
+JWT_SECRET=hLVM1Gr57pOpO1IzJ4LSTb9ClPJvmStpSMaPCtac1s8ftPoMwcfHoYHDHbvRdeoaEnEffcnMRsg2oWFEbGZkkw==
+JWT_EXPIRE=7d
+
+# Frontend URL for CORS
+FRONTEND_URL=http://localhost:8080
+
+
+
+# Rate Limiting (requests per window)
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Security
+BCRYPT_SALT_ROUNDS=12
+
+# Logging
+LOG_LEVEL=info
+
+
+# SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=thanushdinesh04@gmail.com
+SMTP_PASS=kphm iuqb vuma dcrk
+SMTP_FROM_EMAIL=thanushdinesh04@gmail.com
+SMTP_FROM_NAME="Task Management App"
+
+EMAIL_VERIFICATION_TOKEN_EXPIRES_IN=24h
+PASSWORD_RESET_TOKEN_EXPIRES_IN=1h
+
+
+# File Upload (for future features)
+# MAX_FILE_SIZE=10485760
+# UPLOAD_PATH=./uploads
+
+# Redis Configuration (for future caching)
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
+# REDIS_PASSWORD=
+
+
