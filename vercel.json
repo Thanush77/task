@@ -4,10 +4,13 @@
   "builds": [
     {
       "src": "server/server.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
     },
     {
-      "src": "client/**/*",
+      "src": "client/public/**/*",
       "use": "@vercel/static"
     }
   ],
@@ -18,17 +21,10 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/client/$1"
+      "dest": "/client/public/$1"
     }
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "server/server.js": {
-      "maxDuration": 30
-    }
-  },
-  "regions": ["iad1"],
-  "outputDirectory": "client"
+  }
 }

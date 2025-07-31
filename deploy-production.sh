@@ -80,12 +80,16 @@ cd ..
 print_status "Setting up client..."
 cd client
 if [ -f package.json ]; then
-    npm install --production
+    npm install
     # Try to build if build script exists
     if npm run build 2>/dev/null; then
         print_status "Client build completed successfully"
+        print_status "Built files are in client/public/ directory"
     else
         print_status "No build script found, using static files"
+        # Create public directory and copy files if build failed
+        mkdir -p public
+        cp -r *.html *.js *.css public/ 2>/dev/null || true
     fi
 fi
 cd ..
@@ -133,9 +137,9 @@ server {
     listen 80;
     server_name 54.80.7.27;
     
-    # Serve static files
+    # Serve static files from built directory
     location / {
-        root $(pwd)/client;
+        root $(pwd)/client/public;
         try_files \$uri \$uri/ /index.html;
         index index.html;
     }
