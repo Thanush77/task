@@ -9,32 +9,14 @@ const getAPIBaseURL = () => {
     const port = window.location.port;
     const protocol = window.location.protocol;
     
-    // Production server deployment (your server)
-    if (hostname === '54.80.7.27' || hostname === '172.31.36.218' || hostname.includes('your-domain.com')) {
-        return `${protocol}//${hostname}/api`;
-    }
-    
-    // Vercel deployment - temporarily use EC2 server
-    if (hostname.includes('vercel.app')) {
-        return 'http://54.80.7.27:3000/api';
-    }
-    
-    // Development environment
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        // If client is served from port 8080 but API is on 3000
-        const apiPort = port === '8080' ? '3000' : port;
-        return `${protocol}//${hostname}:${apiPort}/api`;
-    }
-    
-    
-    // Fallback
-    return '/api';
+    // Always use EC2 server for API calls
+    return 'http://54.80.7.27:3000/api';
 };
 
 // Global configuration object
 window.APP_CONFIG = {
     API_BASE_URL: getAPIBaseURL(),
-    WS_URL: window.location.origin.replace('http', 'ws').replace('https', 'wss'),
+    WS_URL: 'ws://54.80.7.27:3000',
     APP_NAME: 'TaskFlow Analytics',
     VERSION: '2.0.0',
     FEATURES: {
