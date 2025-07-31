@@ -10,7 +10,7 @@ const getAPIBaseURL = () => {
     const protocol = window.location.protocol;
     
     // Production server deployment (your server)
-    if (hostname === '54.80.7.27' || hostname.includes('your-domain.com')) {
+    if (hostname === '54.80.7.27' || hostname === '172.31.36.218' || hostname.includes('your-domain.com')) {
         return `${protocol}//${hostname}/api`;
     }
     
