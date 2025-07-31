@@ -18,7 +18,7 @@ window.APP_CONFIG = {
     API_BASE_URL: getAPIBaseURL(),
     WS_URL: 'ws://54.80.7.27:3000',
     APP_NAME: 'TaskFlow Analytics',
-    VERSION: '2.0.0',
+    VERSION: '2.0.1',
     FEATURES: {
         REAL_TIME_Updates: true,
         ANALYTICS: true,
