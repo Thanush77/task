@@ -49,18 +49,61 @@ app.use(helmet({
     },
 }));
 
-// CORS middleware
-const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').map(url => url.trim()).filter(Boolean);
+// CORS middleware - Enhanced configuration
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.CLIENT_URL,
+    'http://localhost:3000',
+    'http://localhost:3001', 
+    'http://localhost:8080',
+    'http://54.80.7.27',
+    'http://172.31.36.218',
+    'https://task-cbvc.vercel.app',
+    'https://task.vercel.app'
+].filter(Boolean).map(url => url.trim());
+
+// Add any additional origins from environment
+if (process.env.ALLOWED_ORIGINS) {
+    const extraOrigins = process.env.ALLOWED_ORIGINS.split(',').map(url => url.trim());
+    allowedOrigins.push(...extraOrigins);
+}
+
+console.log('🔧 CORS Allowed Origins:', allowedOrigins);
+
 app.use(cors({
     origin: function(origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl, etc.)
+        // Allow requests with no origin (like mobile apps, curl, Postman, etc.)
         if (!origin) return callback(null, true);
+        
+        // Allow all origins in development
+        if (process.env.NODE_ENV === 'development') {
+            return callback(null, true);
+        }
+        
+        // Check if origin is in allowed list
         if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
+        
+        // Check if origin matches patterns (for dynamic subdomains)
+        const allowedPatterns = [
+            /^https?:\/\/localhost(:\d+)?$/,
+            /^https?:\/\/.*\.vercel\.app$/,
+            /^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/ // Allow IP addresses
+        ];
+        
+        if (allowedPatterns.some(pattern => pattern.test(origin))) {
+            return callback(null, true);
+        }
+        
+        console.warn('⚠️ CORS blocked origin:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 hours
 }));
 
 // Security middleware

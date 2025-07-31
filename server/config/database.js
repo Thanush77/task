@@ -8,6 +8,19 @@ console.log('- User:', process.env.DB_USER);
 console.log('- Port:', process.env.DB_PORT);
 console.log('- Password length:', process.env.DB_PASSWORD ? process.env.DB_PASSWORD.length : 'undefined');
 
+// AWS RDS requires SSL connection
+const sslConfig = process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com') 
+    ? {
+        rejectUnauthorized: false, // AWS RDS uses self-signed certificates
+        ssl: true
+      }
+    : process.env.NODE_ENV === 'production' 
+    ? {
+        rejectUnauthorized: false
+      }
+      
+    : false;
+
 const pool = new Pool({
     user: String(process.env.DB_USER || ''),
     host: String(process.env.DB_HOST || ''),
@@ -17,9 +30,7 @@ const pool = new Pool({
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
-    ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false // required for AWS RDS
-    } : false
+    ssl: sslConfig
 });
 
 // Test database connection
