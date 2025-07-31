@@ -93,6 +93,11 @@ class TaskManager {
         document.addEventListener('keydown', (e) => {
             this.handleKeyboardShortcuts(e);
         });
+        
+        // Cleanup timer intervals when the page is about to unload
+        window.addEventListener('beforeunload', () => {
+            this.clearAllTimerIntervals();
+        });
     }
 
     /**
@@ -136,6 +141,9 @@ class TaskManager {
      */
     async loadTasks() {
         try {
+            // Clear existing timer intervals before loading new tasks
+            this.clearAllTimerIntervals();
+            
             const response = await window.api.getTasks(this.currentFilters);
             this.tasks = response.tasks || response;
             this.renderTasks();
@@ -252,7 +260,6 @@ class TaskManager {
             priority: document.getElementById('taskPriority').value,
             category: document.getElementById('taskCategory').value,
             estimatedHours: parseFloat(document.getElementById('taskEstimatedHours').value) || 1.0,
-            startDate: document.getElementById('taskStartDate').value || null,
             dueDate: document.getElementById('taskDueDate').value || null,
             tags: document.getElementById('taskTags').value
                     .split(',')
@@ -373,9 +380,6 @@ class TaskManager {
         document.getElementById('taskEstimatedHours').value = task.estimated_hours || 1.0;
         
         // Format dates for datetime-local inputs
-        if (task.start_date) {
-            document.getElementById('taskStartDate').value = this.formatDateTimeLocal(task.start_date);
-        }
         if (task.due_date) {
             document.getElementById('taskDueDate').value = this.formatDateTimeLocal(task.due_date);
         }
@@ -509,10 +513,12 @@ class TaskManager {
         const tasksHTML = filteredTasks.map(task => this.renderTask(task)).join('');
         tasksList.innerHTML = tasksHTML;
 
-        // Auto-fix: update timer display for each task after rendering
-        filteredTasks.forEach(task => {
-            this.updateTimerDisplay(task.id);
-        });
+        // Initialize timers for all tasks after rendering
+        setTimeout(() => {
+            filteredTasks.forEach(task => {
+                this.updateTimerDisplay(task.id);
+            });
+        }, 100);
     }
 
     /**
@@ -596,11 +602,10 @@ class TaskManager {
                     <span>📅 ${dueDate}</span>
                     <span>⏱️ ${task.estimated_hours}h</span>
                     <span>📂 ${this.escapeHtml(task.category)}</span>
+                    ${task.assigned_at ? `<span>📋 Assigned ${new Date(task.assigned_at).toLocaleDateString()}</span>` : ''}
                     ${task.created_by_name ? `<span>👨‍💼 Created by ${this.escapeHtml(task.created_by_name)}</span>` : ''}
                     ${isAssignedToCurrentUser && task.assigned_by_name ? 
                         `<span class="assignment-info">✋ Assigned by ${this.escapeHtml(task.assigned_by_name)}</span>` : ''}
-                    ${isAssignedToCurrentUser && task.assigned_at ? 
-                        `<span class="assignment-info">⏰ Assigned on ${new Date(task.assigned_at).toLocaleDateString()} at ${new Date(task.assigned_at).toLocaleTimeString()}</span>` : ''}
                 </div>
                 
                 ${tags ? `<div class="task-tags">${tags}</div>` : ''}
@@ -949,35 +954,143 @@ class TaskManager {
 
     // Time tracking logic
     timerIntervals = {};
+    timerStates = {};
 
     async startTimer(taskId) {
         try {
+            const startButton = document.querySelector(`button[onclick="taskManager.startTimer(${taskId})"]`);
+            const pauseButton = document.querySelector(`button[onclick="taskManager.pauseTimer(${taskId})"]`);
+            const stopButton = document.querySelector(`button[onclick="taskManager.stopTimer(${taskId})"]`);
+            
+            // Update UI immediately
+            if (startButton) {
+                startButton.disabled = true;
+                startButton.innerHTML = '⏳ Starting...';
+            }
+            
             await window.api.request(`/tasks/${taskId}/time/start`, { method: 'POST' });
-            this.updateTimerDisplay(taskId);
+            
+            // Update button states
+            if (startButton) {
+                startButton.disabled = true;
+                startButton.innerHTML = '▶️ Running';
+                startButton.style.opacity = '0.6';
+            }
+            if (pauseButton) {
+                pauseButton.disabled = false;
+                pauseButton.style.opacity = '1';
+            }
+            if (stopButton) {
+                stopButton.disabled = false;
+                stopButton.style.opacity = '1';
+            }
+            
+            this.timerStates[taskId] = { running: true, startTime: new Date() };
+            await this.updateTimerDisplay(taskId);
+            showNotification('Timer started! ⏰', 'success');
         } catch (error) {
+            console.error('Start timer error:', error);
             showNotification('Failed to start timer', 'error');
+            // Reset button if failed
+            const startButton = document.querySelector(`button[onclick="taskManager.startTimer(${taskId})"]`);
+            if (startButton) {
+                startButton.disabled = false;
+                startButton.innerHTML = '▶️ Start';
+            }
         }
     }
 
     async pauseTimer(taskId) {
         try {
+            const startButton = document.querySelector(`button[onclick="taskManager.startTimer(${taskId})"]`);
+            const pauseButton = document.querySelector(`button[onclick="taskManager.pauseTimer(${taskId})"]`);
+            const stopButton = document.querySelector(`button[onclick="taskManager.stopTimer(${taskId})"]`);
+            
+            // Update UI immediately
+            if (pauseButton) {
+                pauseButton.disabled = true;
+                pauseButton.innerHTML = '⏳ Pausing...';
+            }
+            
             await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
+            
+            // Update button states
+            if (startButton) {
+                startButton.disabled = false;
+                startButton.innerHTML = '▶️ Start';
+                startButton.style.opacity = '1';
+            }
+            if (pauseButton) {
+                pauseButton.disabled = true;
+                pauseButton.innerHTML = '⏸️ Paused';
+                pauseButton.style.opacity = '0.6';
+            }
+            if (stopButton) {
+                stopButton.disabled = false;
+                stopButton.style.opacity = '1';
+            }
+            
+            this.timerStates[taskId] = { running: false };
+            this.clearTimerInterval(taskId);
+            await this.updateTimerDisplay(taskId, true);
+            showNotification('Timer paused ⏸️', 'info');
         } catch (error) {
+            console.error('Pause timer error:', error);
             showNotification('Failed to pause timer', 'error');
+            // Reset button if failed
+            const pauseButton = document.querySelector(`button[onclick="taskManager.pauseTimer(${taskId})"]`);
+            if (pauseButton) {
+                pauseButton.disabled = false;
+                pauseButton.innerHTML = '⏸️ Pause';
+            }
         }
-        this.clearTimerInterval(taskId);
-        this.updateTimerDisplay(taskId, true);
     }
 
     async stopTimer(taskId) {
-        // Stop = pause and reset (no active timer)
         try {
-            await window.api.request(`/tasks/${taskId}/time/pause`, { method: 'POST' });
+            const startButton = document.querySelector(`button[onclick="taskManager.startTimer(${taskId})"]`);
+            const pauseButton = document.querySelector(`button[onclick="taskManager.pauseTimer(${taskId})"]`);
+            const stopButton = document.querySelector(`button[onclick="taskManager.stopTimer(${taskId})"]`);
+            
+            // Update UI immediately
+            if (stopButton) {
+                stopButton.disabled = true;
+                stopButton.innerHTML = '⏳ Stopping...';
+            }
+            
+            await window.api.request(`/tasks/${taskId}/time/stop`, { method: 'POST' });
+            
+            // Reset all button states
+            if (startButton) {
+                startButton.disabled = false;
+                startButton.innerHTML = '▶️ Start';
+                startButton.style.opacity = '1';
+            }
+            if (pauseButton) {
+                pauseButton.disabled = true;
+                pauseButton.innerHTML = '⏸️ Pause';
+                pauseButton.style.opacity = '0.6';
+            }
+            if (stopButton) {
+                stopButton.disabled = true;
+                stopButton.innerHTML = '⏹️ Stop';
+                stopButton.style.opacity = '0.6';
+            }
+            
+            this.timerStates[taskId] = { running: false };
+            this.clearTimerInterval(taskId);
+            await this.updateTimerDisplay(taskId, true);
+            showNotification('Timer stopped ⏹️', 'info');
         } catch (error) {
+            console.error('Stop timer error:', error);
             showNotification('Failed to stop timer', 'error');
+            // Reset button if failed
+            const stopButton = document.querySelector(`button[onclick="taskManager.stopTimer(${taskId})"]`);
+            if (stopButton) {
+                stopButton.disabled = false;
+                stopButton.innerHTML = '⏹️ Stop';
+            }
         }
-        this.clearTimerInterval(taskId);
-        this.updateTimerDisplay(taskId, true);
     }
 
     clearTimerInterval(taskId) {
@@ -987,40 +1100,126 @@ class TaskManager {
         }
     }
 
+    clearAllTimerIntervals() {
+        Object.keys(this.timerIntervals).forEach(taskId => {
+            clearInterval(this.timerIntervals[taskId]);
+        });
+        this.timerIntervals = {};
+    }
+
     async updateTimerDisplay(taskId, reset = false) {
-        // Get active timer and total time
         try {
-            const res = await window.api.request(`/tasks/${taskId}/time/active`);
-            const historyRes = await window.api.request(`/tasks/${taskId}/time/history`);
+            const [activeRes, historyRes] = await Promise.all([
+                window.api.request(`/tasks/${taskId}/time/active`),
+                window.api.request(`/tasks/${taskId}/time/history`)
+            ]);
+            
             const timerDisplay = document.getElementById(`timer-display-${taskId}`);
             const timerTotal = document.getElementById(`timer-total-${taskId}`);
-            // Calculate total time (sum durations)
+            
+            if (!timerDisplay || !timerTotal) return;
+            
+            // Calculate total time from history
             let totalSeconds = 0;
-            if (historyRes.history) {
-                for (const entry of historyRes.history) {
-                    if (entry.duration) totalSeconds += Math.floor(entry.duration * 60);
-                }
+            if (historyRes.history && Array.isArray(historyRes.history)) {
+                totalSeconds = historyRes.history.reduce((sum, entry) => {
+                    return sum + (entry.duration ? Math.floor(entry.duration * 60) : 0);
+                }, 0);
             }
-            // If timer is running, add current session
-            if (res.entry && res.entry.startTime && !res.entry.endTime) {
-                const start = new Date(res.entry.startTime);
-                const now = new Date();
-                const diff = Math.floor((now - start) / 1000);
-                timerDisplay.textContent = this.formatSeconds(diff);
+            
+            // Handle active timer
+            const activeEntry = activeRes.entry;
+            if (activeEntry && activeEntry.start_time && !activeEntry.end_time) {
+                // Timer is running
+                const startTime = new Date(activeEntry.start_time);
+                
+                const updateDisplay = () => {
+                    const now = new Date();
+                    const currentSessionSeconds = Math.floor((now - startTime) / 1000);
+                    const totalWithCurrent = totalSeconds + currentSessionSeconds;
+                    
+                    timerDisplay.textContent = this.formatSeconds(currentSessionSeconds);
+                    timerDisplay.style.color = '#28a745'; // Green for running
+                    timerTotal.textContent = `Total: ${this.formatSeconds(totalWithCurrent)}`;
+                    
+                    // Add visual indicator
+                    timerDisplay.style.fontWeight = 'bold';
+                    if (!timerDisplay.classList.contains('timer-running')) {
+                        timerDisplay.classList.add('timer-running');
+                    }
+                };
+                
+                // Update immediately
+                updateDisplay();
+                
+                // Clear existing interval and start new one
                 this.clearTimerInterval(taskId);
-                this.timerIntervals[taskId] = setInterval(() => {
-                    const now2 = new Date();
-                    const diff2 = Math.floor((now2 - start) / 1000);
-                    timerDisplay.textContent = this.formatSeconds(diff2);
-                }, 1000);
-                timerTotal.textContent = `Total: ${this.formatSeconds(totalSeconds + diff)}`;
+                this.timerIntervals[taskId] = setInterval(updateDisplay, 1000);
+                
+                // Update button states
+                this.updateTimerButtons(taskId, 'running');
+                
             } else {
-                timerDisplay.textContent = '--:--:--';
+                // Timer is not running
+                timerDisplay.textContent = '00:00:00';
+                timerDisplay.style.color = '#6c757d'; // Gray for stopped
+                timerDisplay.style.fontWeight = 'normal';
+                timerDisplay.classList.remove('timer-running');
                 timerTotal.textContent = `Total: ${this.formatSeconds(totalSeconds)}`;
+                
                 this.clearTimerInterval(taskId);
+                
+                // Update button states
+                this.updateTimerButtons(taskId, 'stopped');
             }
+            
         } catch (error) {
-            // Ignore
+            console.error(`Error updating timer display for task ${taskId}:`, error);
+            // Fallback display
+            const timerDisplay = document.getElementById(`timer-display-${taskId}`);
+            const timerTotal = document.getElementById(`timer-total-${taskId}`);
+            if (timerDisplay) timerDisplay.textContent = '--:--:--';
+            if (timerTotal) timerTotal.textContent = 'Total: --:--:--';
+        }
+    }
+    
+    updateTimerButtons(taskId, state) {
+        const startButton = document.querySelector(`button[onclick="taskManager.startTimer(${taskId})"]`);
+        const pauseButton = document.querySelector(`button[onclick="taskManager.pauseTimer(${taskId})"]`);
+        const stopButton = document.querySelector(`button[onclick="taskManager.stopTimer(${taskId})"]`);
+        
+        if (state === 'running') {
+            if (startButton) {
+                startButton.disabled = true;
+                startButton.innerHTML = '▶️ Running';
+                startButton.style.opacity = '0.6';
+            }
+            if (pauseButton) {
+                pauseButton.disabled = false;
+                pauseButton.innerHTML = '⏸️ Pause';
+                pauseButton.style.opacity = '1';
+            }
+            if (stopButton) {
+                stopButton.disabled = false;
+                stopButton.innerHTML = '⏹️ Stop';
+                stopButton.style.opacity = '1';
+            }
+        } else {
+            if (startButton) {
+                startButton.disabled = false;
+                startButton.innerHTML = '▶️ Start';
+                startButton.style.opacity = '1';
+            }
+            if (pauseButton) {
+                pauseButton.disabled = true;
+                pauseButton.innerHTML = '⏸️ Pause';
+                pauseButton.style.opacity = '0.6';
+            }
+            if (stopButton) {
+                stopButton.disabled = true;
+                stopButton.innerHTML = '⏹️ Stop';
+                stopButton.style.opacity = '0.6';
+            }
         }
     }
 

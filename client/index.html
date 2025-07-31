@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow - Task Management System</title>
     <link rel="stylesheet" href="css/styles.min.css">
+    <link rel="stylesheet" href="css/reports.css">
+    <link rel="stylesheet" href="css/assignment-info.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -287,22 +289,58 @@
         <!-- Reports Content -->
         <div id="reports" class="tab-content">
             <div class="reports-header">
-                <h2>Reports & Analytics</h2>
-                <div class="reports-filters">
-                    <label for="reportStartDate">Start Date:</label>
-                    <input type="date" id="reportStartDate">
-                    <label for="reportEndDate">End Date:</label>
-                    <input type="date" id="reportEndDate">
-                    <button class="btn btn-primary" id="applyReportFilters">Apply</button>
-                    <button class="btn btn-secondary" id="resetReportFilters">Reset</button>
+                <div class="header-left">
+                    <h2>📊 Reports & Analytics</h2>
+                    <p>Comprehensive insights into your team's productivity and task management</p>
                 </div>
-                <div class="reports-export">
-                    <button class="btn btn-secondary" id="exportCSV">Export CSV</button>
-                    <button class="btn btn-secondary" id="exportPDF">Export PDF</button>
+                <div class="header-right">
+                    <button class="btn btn-secondary" id="refreshReports" onclick="refreshReports()">
+                        <span class="icon">🔄</span> Refresh
+                    </button>
                 </div>
             </div>
+
+            <!-- Enhanced Filters Section -->
+            <div class="reports-controls">
+                <div class="filters-section">
+                    <div class="filter-group">
+                        <label for="reportStartDate">Start Date:</label>
+                        <input type="date" id="reportStartDate" class="date-input">
+                    </div>
+                    <div class="filter-group">
+                        <label for="reportEndDate">End Date:</label>
+                        <input type="date" id="reportEndDate" class="date-input">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-primary" id="applyReportFilters">Apply Filters</button>
+                        <button class="btn btn-secondary" id="resetReportFilters">Reset</button>
+                    </div>
+                </div>
+                
+                <div class="export-section">
+                    <div class="export-group">
+                        <button class="btn btn-outline" id="exportCSV">
+                            <span class="icon">📋</span> Export CSV
+                        </button>
+                        <button class="btn btn-outline" id="exportPDF">
+                            <span class="icon">📄</span> Export PDF
+                        </button>
+                        <button class="btn btn-outline" id="exportExcel">
+                            <span class="icon">📊</span> Export Excel
+                        </button>
+                    </div>
+                    <div class="realtime-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="realtimeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">Real-time Updates</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="reports-content">
-                <!-- Overview Cards -->
+                <!-- Enhanced Overview Cards -->
                 <div class="analytics-overview">
                     <div class="overview-card">
                         <div class="card-icon">📊</div>
@@ -311,6 +349,7 @@
                             <div class="card-value" id="analyticsTotal">0</div>
                             <div class="card-trend positive" id="analyticsTotalTrend">↗ 0%</div>
                         </div>
+                        <div class="card-sparkline" id="totalTasksSparkline"></div>
                     </div>
                     <div class="overview-card">
                         <div class="card-icon">✅</div>
@@ -319,6 +358,7 @@
                             <div class="card-value" id="analyticsCompleted">0</div>
                             <div class="card-trend positive" id="analyticsCompletedTrend">↗ 0%</div>
                         </div>
+                        <div class="card-sparkline" id="completedTasksSparkline"></div>
                     </div>
                     <div class="overview-card">
                         <div class="card-icon">⏱️</div>
@@ -327,6 +367,7 @@
                             <div class="card-value" id="analyticsAvgTime">0h</div>
                             <div class="card-trend neutral" id="analyticsAvgTimeTrend">— 0%</div>
                         </div>
+                        <div class="card-sparkline" id="avgTimeSparkline"></div>
                     </div>
                     <div class="overview-card">
                         <div class="card-icon">🎯</div>
@@ -335,61 +376,164 @@
                             <div class="card-value" id="analyticsCompletionRate">0%</div>
                             <div class="card-trend positive" id="analyticsCompletionRateTrend">↗ 0%</div>
                         </div>
+                        <div class="card-sparkline" id="completionRateSparkline"></div>
                     </div>
                 </div>
 
-                <!-- Task Status Distribution -->
-                <div id="taskStatsReport" class="report-section">
-                    <h3>Task Status Distribution</h3>
-                    <div class="chart-container">
-                        <div id="taskStatsChart"></div>
+                <!-- Charts Grid -->
+                <div class="charts-grid">
+                    <!-- Task Status Distribution -->
+                    <div id="taskStatsReport" class="report-section chart-card">
+                        <div class="section-header">
+                            <h3>📈 Task Status Distribution</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Fullscreen">📤</button>
+                                <button class="btn-icon" title="Download">💾</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="taskStatsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Priority Distribution -->
+                    <div id="priorityStatsReport" class="report-section chart-card">
+                        <div class="section-header">
+                            <h3>🔥 Priority Distribution</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Fullscreen">📤</button>
+                                <button class="btn-icon" title="Download">💾</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="priorityStatsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Task Completion Trends -->
+                    <div id="trendReport" class="report-section chart-card full-width">
+                        <div class="section-header">
+                            <h3>📈 Task Completion Trends</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Fullscreen">📤</button>
+                                <button class="btn-icon" title="Download">💾</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Time Analytics -->
+                    <div id="timeAnalyticsReport" class="report-section chart-card full-width">
+                        <div class="section-header">
+                            <h3>⏰ Time Analytics</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Fullscreen">📤</button>
+                                <button class="btn-icon" title="Download">💾</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="timeAnalyticsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Workload Distribution -->
+                    <div id="workloadReport" class="report-section chart-card">
+                        <div class="section-header">
+                            <h3>⚖️ Workload Distribution</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Fullscreen">📤</button>
+                                <button class="btn-icon" title="Download">💾</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="workloadChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Priority Distribution -->
-                <div id="priorityStatsReport" class="report-section">
-                    <h3>Priority Distribution</h3>
-                    <div class="chart-container">
-                        <div id="priorityStatsChart"></div>
+                <!-- Detailed Tables Section -->
+                <div class="tables-section">
+                    <!-- Team Performance Table -->
+                    <div id="userProductivityReport" class="report-section table-card">
+                        <div class="section-header">
+                            <h3>👥 Team Performance</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Export Table">📊</button>
+                                <button class="btn-icon" title="Print">🖨️</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div id="userProductivityTable"></div>
+                        </div>
+                    </div>
+
+                    <!-- Time Tracking Analytics -->
+                    <div id="timeTrackingReport" class="report-section table-card">
+                        <div class="section-header">
+                            <h3>🕐 Time Tracking Summary</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Export Table">📊</button>
+                                <button class="btn-icon" title="Print">🖨️</button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div id="timeTrackingTable"></div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- User Productivity -->
-                <div id="userProductivityReport" class="report-section">
-                    <h3>User Productivity</h3>
-                    <div class="chart-container">
-                        <div id="userProductivityTable"></div>
+                <!-- Alerts and Notifications -->
+                <div class="alerts-section">
+                    <!-- Overdue Tasks Alert -->
+                    <div id="overdueReport" class="report-section alert-section">
+                        <div class="section-header">
+                            <h3>🚨 Overdue Tasks</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Notify Team">📢</button>
+                                <button class="btn-icon" title="Export List">📋</button>
+                            </div>
+                        </div>
+                        <div class="alert-container">
+                            <div id="overdueTasksList" class="alert-list"></div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Time Tracking Analytics -->
-                <div id="timeTrackingReport" class="report-section">
-                    <h3>Time Tracking Analytics</h3>
-                    <div class="chart-container">
-                        <div id="timeTrackingTable"></div>
+                    <!-- Performance Insights -->
+                    <div id="insightsReport" class="report-section insights-section">
+                        <div class="section-header">
+                            <h3>💡 Performance Insights</h3>
+                            <div class="section-actions">
+                                <button class="btn-icon" title="Generate Report">📈</button>
+                            </div>
+                        </div>
+                        <div class="insights-container">
+                            <div id="performanceInsights">
+                                <div class="insight-item">
+                                    <div class="insight-icon">🎯</div>
+                                    <div class="insight-content">
+                                        <h4>Team Efficiency</h4>
+                                        <p>Your team's completion rate has improved by 15% this month!</p>
+                                    </div>
+                                </div>
+                                <div class="insight-item">
+                                    <div class="insight-icon">⚡</div>
+                                    <div class="insight-content">
+                                        <h4>Quick Wins</h4>
+                                        <p>Focus on high-priority tasks to maximize impact this week.</p>
+                                    </div>
+                                </div>
+                                <div class="insight-item">
+                                    <div class="insight-icon">📊</div>
+                                    <div class="insight-content">
+                                        <h4>Trend Analysis</h4>
+                                        <p>Task creation is outpacing completion. Consider workload rebalancing.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Task Completion Trends -->
-                <div id="trendReport" class="report-section">
-                    <h3>Task Completion Trends</h3>
-                    <div class="chart-container">
-                        <div id="trendChart"></div>
-                    </div>
-                </div>
-
-                <!-- Category Performance -->
-                <div id="categoryReport" class="report-section">
-                    <h3>Category Performance</h3>
-                    <div class="chart-container">
-                        <div id="categoryChart"></div>
-                    </div>
-                </div>
-
-                <!-- Overdue Tasks Alert -->
-                <div id="overdueReport" class="report-section alert-section">
-                    <h3>🚨 Overdue Tasks</h3>
-                    <div id="overdueTasksList" class="alert-list"></div>
                 </div>
             </div>
         </div>
@@ -456,15 +600,9 @@
                     <input type="number" id="taskEstimatedHours" min="0.5" step="0.5" value="1.0">
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="taskStartDate">Start Date & Time</label>
-                        <input type="datetime-local" id="taskStartDate">
-                    </div>
-                    <div class="form-group">
-                        <label for="taskDueDate">Due Date & Time</label>
-                        <input type="datetime-local" id="taskDueDate">
-                    </div>
+                <div class="form-group">
+                    <label for="taskDueDate">Due Date & Time</label>
+                    <input type="datetime-local" id="taskDueDate">
                 </div>
 
                 <div class="form-group">
@@ -523,7 +661,11 @@
 
     <!-- Scripts -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/websocket.js"></script>
-    <script src="js/app.min.js"></script>
+    <script src="js/reports.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
